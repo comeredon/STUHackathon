@@ -1,8 +1,6 @@
 import { ChatRequest, ChatResponse } from '../types/chat';
 
 const FOUNDRY_API_URL = import.meta.env.VITE_FOUNDRY_API_URL || '';
-const FOUNDRY_PROJECT_ID = import.meta.env.VITE_FOUNDRY_PROJECT_ID || '';
-const FOUNDRY_AGENT_ID = import.meta.env.VITE_FOUNDRY_AGENT_ID || '';
 
 /**
  * Azure AI Foundry API client with Fabric data agent
