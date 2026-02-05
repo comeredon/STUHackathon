@@ -1,0 +1,69 @@
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# Functions
+api/bin/
+api/obj/
+.funcignore
+local.settings.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.venv
+
+# Azure
+.azure/
+*.publish/
+*.azurePubxml
+
+# Docker
+*.log
+.dockerignore
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Misc
+*.bak
+*.tmp
+.cache/
+.temp/
+thumbs.db
+Thumbs.db
