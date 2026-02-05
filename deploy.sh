@@ -141,23 +141,21 @@ fi
 
 # Build and push API image
 echo "🔨 Building backend API image..."
-cd api
 az acr build \
   --registry $CONTAINER_REGISTRY \
   --image stuhackathon-api:latest \
-  --file Dockerfile \
-  .
-cd ..
+  --file api/Dockerfile \
+  --platform linux \
+  api
 
 # Build and push frontend image
 echo "🔨 Building frontend image..."
-cd frontend
 az acr build \
   --registry $CONTAINER_REGISTRY \
   --image stuhackathon-frontend:latest \
-  --file Dockerfile \
-  .
-cd ..
+  --file frontend/Dockerfile \
+  --platform linux \
+  frontend
 
 # Deploy Backend API with Managed Identity
 echo "🚀 Deploying backend API..."

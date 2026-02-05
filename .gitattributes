@@ -1,0 +1,20 @@
+# Force LF line endings for shell scripts (required for Docker/Linux)
+*.sh text eol=lf
+
+# Force LF line endings for Unix config files
+*.conf text eol=lf
+docker-entrypoint.sh text eol=lf
+
+# Default to auto line ending conversion for other text files
+* text=auto
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
