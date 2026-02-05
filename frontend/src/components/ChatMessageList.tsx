@@ -56,7 +56,7 @@ export function ChatMessageList({ messages }: ChatMessageListProps) {
                 backgroundClip: 'text',
               }}
             >
-              Welcome to STUquestion bot
+              Welcome to STU BizPulse
             </h2>
             <p style={{ color: '#64748b', fontSize: '16px', marginBottom: '32px', lineHeight: '1.6' }}>
               Your intelligent AI assistant for data exploration.

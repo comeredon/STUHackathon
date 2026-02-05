@@ -151,7 +151,7 @@ export function ChatContainer() {
             </div>
             <div>
               <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '700', letterSpacing: '-0.5px' }}>
-                STUquestion bot
+                STU BizPulse
               </h1>
               <p style={{ margin: '4px 0 0 0', fontSize: '13px', opacity: 0.9, fontWeight: '400' }}>
                 AI-Powered Data Intelligence

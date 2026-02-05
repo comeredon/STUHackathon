@@ -55,7 +55,7 @@ function App() {
           >
             🤖
           </div>
-          <h1 style={{ fontSize: '32px', fontWeight: '700', margin: '0 0 12px 0' }}>STUquestion bot</h1>
+          <h1 style={{ fontSize: '32px', fontWeight: '700', margin: '0 0 12px 0' }}>STU BizPulse</h1>
           <p style={{ fontSize: '16px', opacity: 0.9 }}>Initializing authentication...</p>
         </div>
       </div>
