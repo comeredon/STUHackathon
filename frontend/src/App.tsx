@@ -34,12 +34,29 @@ function App() {
           alignItems: 'center',
           justifyContent: 'center',
           height: '100vh',
-          backgroundColor: '#f3f2f1',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         }}
       >
-        <div style={{ textAlign: 'center' }}>
-          <h1>Loading...</h1>
-          <p>Initializing authentication...</p>
+        <div style={{ textAlign: 'center', color: 'white' }}>
+          <div
+            style={{
+              width: '64px',
+              height: '64px',
+              margin: '0 auto 24px',
+              background: 'rgba(255, 255, 255, 0.2)',
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '32px',
+              backdropFilter: 'blur(10px)',
+              animation: 'pulse 2s ease-in-out infinite',
+            }}
+          >
+            🤖
+          </div>
+          <h1 style={{ fontSize: '32px', fontWeight: '700', margin: '0 0 12px 0' }}>STUquestion bot</h1>
+          <p style={{ fontSize: '16px', opacity: 0.9 }}>Initializing authentication...</p>
         </div>
       </div>
     );

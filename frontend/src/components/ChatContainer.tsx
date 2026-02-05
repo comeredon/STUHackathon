@@ -103,78 +103,141 @@ export function ChatContainer() {
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
-        maxWidth: '1200px',
+        maxWidth: '1400px',
         margin: '0 auto',
-        backgroundColor: 'white',
-        boxShadow: '0 0 10px rgba(0,0,0,0.1)',
+        padding: '24px',
       }}
     >
-      {/* Header */}
       <div
         style={{
-          padding: '16px',
-          backgroundColor: '#0078d4',
-          color: 'white',
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
+          flexDirection: 'column',
+          height: '100%',
+          backgroundColor: 'white',
+          borderRadius: '24px',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+          overflow: 'hidden',
+          animation: 'fadeIn 0.5s ease-out',
         }}
       >
-        <h1 style={{ margin: 0, fontSize: '20px' }}>
-          Fabric Lakehouse Chatbot
-        </h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span style={{ fontSize: '14px' }}>Welcome, {userName}</span>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: 'white',
-              color: '#0078d4',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: '600',
-            }}
-          >
-            Sign Out
-          </button>
-        </div>
-      </div>
-
-      {/* Info Banner */}
-      <div
-        style={{
-          padding: '12px 16px',
-          backgroundColor: '#f3f2f1',
-          borderBottom: '1px solid #edebe9',
-          fontSize: '14px',
-          color: '#605e5c',
-        }}
-      >
-        ℹ️ Connected to <strong>Azure AI Foundry</strong> with Microsoft Fabric data agent via secure backend API
-        {threadId && <span style={{ marginLeft: '8px' }}>• Thread: {threadId.substring(0, 8)}...</span>}
-      </div>
-
-      {/* Error Display */}
-      {error && (
+        {/* Header */}
         <div
           style={{
-            padding: '12px 16px',
-            backgroundColor: '#fde7e9',
-            color: '#a80000',
-            borderBottom: '1px solid #edebe9',
+            padding: '24px 32px',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            boxShadow: '0 4px 20px rgba(102, 126, 234, 0.4)',
           }}
         >
-          <strong>Error:</strong> {error}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div
+              style={{
+                width: '48px',
+                height: '48px',
+                background: 'rgba(255, 255, 255, 0.2)',
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '24px',
+                fontWeight: 'bold',
+                backdropFilter: 'blur(10px)',
+              }}
+            >
+              🤖
+            </div>
+            <div>
+              <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '700', letterSpacing: '-0.5px' }}>
+                STUquestion bot
+              </h1>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', opacity: 0.9, fontWeight: '400' }}>
+                AI-Powered Data Intelligence
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '13px', opacity: 0.85, marginBottom: '2px' }}>Welcome back</div>
+              <div style={{ fontSize: '15px', fontWeight: '600' }}>{userName}</div>
+            </div>
+            <button
+              onClick={handleLogout}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                color: 'white',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                borderRadius: '10px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '14px',
+                backdropFilter: 'blur(10px)',
+                transition: 'all 0.3s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
-      )}
 
-      {/* Chat Messages */}
-      <ChatMessageList messages={messages} />
+        {/* Info Banner */}
+        <div
+          style={{
+            padding: '14px 32px',
+            backgroundColor: '#f8f9fe',
+            borderBottom: '1px solid #e5e7f3',
+            fontSize: '13px',
+            color: '#5a67d8',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span style={{ fontSize: '16px' }}>✨</span>
+          <span>
+            Powered by <strong>Azure AI Foundry</strong> with Microsoft Fabric data agent
+            {threadId && (
+              <span style={{ marginLeft: '8px', opacity: 0.7 }}>• Session: {threadId.substring(0, 8)}...</span>
+            )}
+          </span>
+        </div>
 
-      {/* Chat Input */}
-      <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
+        {/* Error Display */}
+        {error && (
+          <div
+            style={{
+              padding: '14px 32px',
+              background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+              color: '#991b1b',
+              borderBottom: '1px solid #fca5a5',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              animation: 'slideUp 0.3s ease-out',
+            }}
+          >
+            <span style={{ fontSize: '16px' }}>⚠️</span>
+            <span><strong>Error:</strong> {error}</span>
+          </div>
+        )}
+
+        {/* Chat Messages */}
+        <ChatMessageList messages={messages} />
+
+        {/* Chat Input */}
+        <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
+      </div>
     </div>
   );
 }
