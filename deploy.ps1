@@ -5,6 +5,49 @@ Write-Host "🚀 STUHackathon Deployment to Azure Container Apps" -ForegroundCol
 Write-Host "=================================================" -ForegroundColor Green
 Write-Host ""
 
+# Configuration file path
+$CONFIG_FILE = ".deployment-config.json"
+
+# Function to load saved configuration
+function Load-Config {
+    if (Test-Path $CONFIG_FILE) {
+        Write-Host "📂 Found saved configuration from previous deployment" -ForegroundColor Cyan
+        try {
+            $config = Get-Content $CONFIG_FILE -Raw | ConvertFrom-Json
+            return $config
+        } catch {
+            Write-Host "⚠️  Could not read config file, starting fresh" -ForegroundColor Yellow
+            return $null
+        }
+    }
+    return $null
+}
+
+# Function to save configuration
+function Save-Config {
+    param($config)
+    try {
+        $config | ConvertTo-Json -Depth 10 | Set-Content $CONFIG_FILE
+        Write-Host "💾 Configuration saved for next deployment" -ForegroundColor Green
+    } catch {
+        Write-Host "⚠️  Could not save configuration file" -ForegroundColor Yellow
+    }
+}
+
+# Function to prompt with default value
+function Read-HostWithDefault {
+    param($prompt, $default)
+    if ($default) {
+        $input = Read-Host "$prompt [$default]"
+        if ([string]::IsNullOrWhiteSpace($input)) {
+            return $default
+        }
+        return $input
+    } else {
+        return Read-Host $prompt
+    }
+}
+
 # Login to Azure
 Write-Host "📝 Logging in to Azure..." -ForegroundColor Cyan
 az login
@@ -13,8 +56,11 @@ Write-Host ""
 Write-Host "📋 Configuration:" -ForegroundColor Cyan
 Write-Host ""
 
-# Prompt for resource group only
-$RESOURCE_GROUP = Read-Host "Enter Resource Group name"
+# Load previous configuration
+$savedConfig = Load-Config
+
+# Prompt for resource group with saved default
+$RESOURCE_GROUP = Read-HostWithDefault "Enter Resource Group name" $savedConfig.resourceGroup
 if ([string]::IsNullOrWhiteSpace($RESOURCE_GROUP)) {
     Write-Host "❌ Error: Resource group is required" -ForegroundColor Red
     exit 1
@@ -24,7 +70,7 @@ if ([string]::IsNullOrWhiteSpace($RESOURCE_GROUP)) {
 $rgExists = az group show --name $RESOURCE_GROUP 2>$null
 if (-not $rgExists) {
     Write-Host "📦 Resource group '$RESOURCE_GROUP' does not exist." -ForegroundColor Yellow
-    $LOCATION = Read-Host "Enter location to create it (e.g., eastus)"
+    $LOCATION = Read-HostWithDefault "Enter location to create it (e.g., eastus)" $savedConfig.location
     if ([string]::IsNullOrWhiteSpace($LOCATION)) {
         Write-Host "❌ Error: Location is required to create resource group" -ForegroundColor Red
         exit 1
@@ -52,19 +98,16 @@ if ($foundryJson) {
         Write-Host "✅ Found Foundry resource: $FOUNDRY_RESOURCE_NAME" -ForegroundColor Green
         Write-Host "✅ Endpoint: $FOUNDRY_ENDPOINT" -ForegroundColor Green
         
-        # Prompt for project and agent IDs
-        $input = Read-Host "Enter Foundry Project ID [proj-default]"
-        $FOUNDRY_PROJECT_ID = if ([string]::IsNullOrWhiteSpace($input)) { "proj-default" } else { $input }
-        
-        $input = Read-Host "Enter Foundry Agent ID [Agent-Data]"
-        $FOUNDRY_AGENT_ID = if ([string]::IsNullOrWhiteSpace($input)) { "Agent-Data" } else { $input }
+        # Prompt for project and agent IDs with defaults
+        $FOUNDRY_PROJECT_ID = Read-HostWithDefault "Enter Foundry Project ID" ($savedConfig.foundryProjectId ?? "proj-default")
+        $FOUNDRY_AGENT_ID = Read-HostWithDefault "Enter Foundry Agent ID" ($savedConfig.foundryAgentId ?? "Agent-Data")
     }
 } else {
     Write-Host "⚠️  No Azure AI Foundry resource found in this resource group." -ForegroundColor Yellow
-    $FOUNDRY_ENDPOINT = Read-Host "Enter Foundry endpoint URL"
-    $FOUNDRY_RESOURCE_NAME = Read-Host "Enter Foundry resource name"
-    $FOUNDRY_PROJECT_ID = Read-Host "Enter Foundry Project ID"
-    $FOUNDRY_AGENT_ID = Read-Host "Enter Foundry Agent ID"
+    $FOUNDRY_ENDPOINT = Read-HostWithDefault "Enter Foundry endpoint URL" $savedConfig.foundryEndpoint
+    $FOUNDRY_RESOURCE_NAME = Read-HostWithDefault "Enter Foundry resource name" $savedConfig.foundryResourceName
+    $FOUNDRY_PROJECT_ID = Read-HostWithDefault "Enter Foundry Project ID" $savedConfig.foundryProjectId
+    $FOUNDRY_AGENT_ID = Read-HostWithDefault "Enter Foundry Agent ID" $savedConfig.foundryAgentId
 }
 
 # Auto-discover tenant ID from current login
@@ -73,13 +116,12 @@ Write-Host "✅ Using Tenant ID: $AZURE_TENANT_ID" -ForegroundColor Green
 
 # Auto-discover or prompt for Azure AD app registration
 Write-Host "🔍 Looking for Azure AD app registrations..." -ForegroundColor Cyan
-$AZURE_CLIENT_ID = az ad app list --show-mine --query "[0].appId" --output tsv 2>$null
-if ($AZURE_CLIENT_ID -and $AZURE_CLIENT_ID -ne "null") {
-    Write-Host "✅ Found Azure AD app: $AZURE_CLIENT_ID" -ForegroundColor Green
-    $useApp = Read-Host "Use this app registration? (y/n) [y]"
-    if ($useApp -eq 'n' -or $useApp -eq 'N') {
-        $AZURE_CLIENT_ID = Read-Host "Enter Azure AD Client ID"
-    }
+$discoveredClientId = az ad app list --show-mine --query "[0].appId" --output tsv 2>$null
+$defaultClientId = if ($savedConfig.azureClientId) { $savedConfig.azureClientId } elseif ($discoveredClientId -and $discoveredClientId -ne "null") { $discoveredClientId } else { $null }
+
+if ($defaultClientId) {
+    Write-Host "💡 Found saved/discovered Azure AD app: $defaultClientId" -ForegroundColor Cyan
+    $AZURE_CLIENT_ID = Read-HostWithDefault "Enter Azure AD Client ID (app registration)" $defaultClientId
 } else {
     $AZURE_CLIENT_ID = Read-Host "Enter Azure AD Client ID (app registration)"
 }
@@ -291,3 +333,25 @@ Write-Host "  Backend API: https://$API_FQDN" -ForegroundColor White
 Write-Host "  Frontend:    https://$FRONTEND_FQDN" -ForegroundColor White
 Write-Host "  Resource Group: $RESOURCE_GROUP" -ForegroundColor White
 Write-Host "  Managed Identity: $PRINCIPAL_ID" -ForegroundColor White
+
+
+# Save configuration for next time
+$deploymentConfig = @{
+    resourceGroup = $RESOURCE_GROUP
+    location = $LOCATION
+    foundryEndpoint = $FOUNDRY_ENDPOINT
+    foundryResourceName = $FOUNDRY_RESOURCE_NAME
+    foundryProjectId = $FOUNDRY_PROJECT_ID
+    foundryAgentId = $FOUNDRY_AGENT_ID
+    azureClientId = $AZURE_CLIENT_ID
+    containerRegistry = $CONTAINER_REGISTRY
+    environment = $ENVIRONMENT
+    apiAppName = $API_APP_NAME
+    frontendAppName = $FRONTEND_APP_NAME
+    lastDeployment = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+}
+
+Save-Config $deploymentConfig
+
+Write-Host ""
+Write-Host "💡 Configuration saved! Next deployment will use these values as defaults." -ForegroundColor Cyan

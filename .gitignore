@@ -67,3 +67,7 @@ coverage/
 .temp/
 thumbs.db
 Thumbs.db
+
+# Deployment configuration (contains sensitive data)
+.deployment-config.json
+deployment-config.json
