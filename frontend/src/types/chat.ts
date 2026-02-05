@@ -1,7 +1,10 @@
+export type BackendMode = 'functions' | 'fabric-agent';
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  query?: string; // Optional SQL query for visualization
 }
 
 export interface ChatRequest {
