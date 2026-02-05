@@ -1,5 +1,29 @@
 import { LogLevel, Configuration } from '@azure/msal-browser';
 
+// Runtime config from window object (injected by docker-entrypoint.sh)
+// Falls back to Vite env vars for local development
+declare global {
+  interface Window {
+    APP_CONFIG?: {
+      VITE_AZURE_CLIENT_ID: string;
+      VITE_AZURE_AUTHORITY: string;
+      VITE_REDIRECT_URI: string;
+      VITE_POST_LOGOUT_REDIRECT_URI: string;
+      VITE_FUNCTIONS_API_URL: string;
+      VITE_FABRIC_AGENT_API_URL: string;
+    };
+  }
+}
+
+const getConfig = (key: keyof NonNullable<typeof window.APP_CONFIG>) => {
+  // In production (Docker), use runtime config from window.APP_CONFIG
+  if (window.APP_CONFIG && window.APP_CONFIG[key]) {
+    return window.APP_CONFIG[key];
+  }
+  // In development, use Vite environment variables
+  return import.meta.env[key] || '';
+};
+
 /**
  * Configuration object to be passed to MSAL instance on creation.
  * For a full list of MSAL.js configuration parameters, visit:
@@ -7,10 +31,10 @@ import { LogLevel, Configuration } from '@azure/msal-browser';
  */
 export const msalConfig: Configuration = {
   auth: {
-    clientId: import.meta.env.VITE_AZURE_CLIENT_ID || '',
-    authority: import.meta.env.VITE_AZURE_AUTHORITY || 'https://login.microsoftonline.com/common',
-    redirectUri: import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173',
-    postLogoutRedirectUri: import.meta.env.VITE_POST_LOGOUT_REDIRECT_URI || 'http://localhost:5173',
+    clientId: getConfig('VITE_AZURE_CLIENT_ID'),
+    authority: getConfig('VITE_AZURE_AUTHORITY') || 'https://login.microsoftonline.com/common',
+    redirectUri: getConfig('VITE_REDIRECT_URI') || 'http://localhost:5173',
+    postLogoutRedirectUri: getConfig('VITE_POST_LOGOUT_REDIRECT_URI') || 'http://localhost:5173',
     navigateToLoginRequestUrl: true,
   },
   cache: {
