@@ -1,0 +1,92 @@
+name: Frontend - Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - comeredon  # Add other branches as needed
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-deploy.yml'
+
+env:
+  ACR_NAME: acrstuhackathonfrontend
+  ACR_LOGIN_SERVER: acrstuhackathonfrontend.azurecr.io
+  CONTAINER_APP_NAME: app-stuhackathon-frontend
+  RESOURCE_GROUP: rg-stuhackathon-dev
+  IMAGE_NAME: stuhackathon-frontend
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build React application
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Generate image tag
+        id: image-tag
+        run: |
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          IMAGE_TAG="${TIMESTAMP}-${COMMIT_SHA}"
+          echo "tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "Generated image tag: ${IMAGE_TAG}"
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to Azure Container Registry
+        run: |
+          az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Build and push Docker image
+        working-directory: ./frontend
+        run: |
+          IMAGE_TAG=${{ steps.image-tag.outputs.tag }}
+          FULL_IMAGE_NAME="${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
+          LATEST_IMAGE_NAME="${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest"
+          
+          echo "Building image: ${FULL_IMAGE_NAME}"
+          docker build -t "${FULL_IMAGE_NAME}" -t "${LATEST_IMAGE_NAME}" .
+          
+          echo "Pushing image with tag: ${IMAGE_TAG}"
+          docker push "${FULL_IMAGE_NAME}"
+          
+          echo "Pushing latest tag"
+          docker push "${LATEST_IMAGE_NAME}"
+
+      - name: Deploy to Azure Container Apps
+        run: |
+          IMAGE_TAG=${{ steps.image-tag.outputs.tag }}
+          FULL_IMAGE_NAME="${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
+          
+          echo "Deploying image: ${FULL_IMAGE_NAME}"
+          az containerapp update \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image "${FULL_IMAGE_NAME}"
+
+      - name: Deployment summary
+        run: |
+          echo "✅ Deployment completed successfully!"
+          echo "📦 Image: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.tag }}"
+          echo "🚀 Container App: ${{ env.CONTAINER_APP_NAME }}"
+          echo "📍 Resource Group: ${{ env.RESOURCE_GROUP }}"
