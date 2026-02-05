@@ -1,6 +1,16 @@
 # Plan: Azure AI Chatbot for Fabric Lakehouse Queries
 
-This project creates an intelligent chatbot that converts natural language questions into SQL queries for Microsoft Fabric Lakehouse, with Azure AD authentication and conversation memory. The architecture uses Azure Container Apps (React), dual backend connectivity (Azure Functions + Fabric Embedded Agent API), Azure OpenAI for query generation, and Azure Cosmos DB for conversation history—all following Microsoft best practices.
+This project creates an intelligent chatbot that converts natural language questions into SQL queries for Microsoft Fabric Lakehouse, with Azure AD authentication and conversation memory. The architecture uses Azure Container Apps (React), dual backend connectivity (Azure Functions + Fabric Embedded Agent API), Azure OpenAI GPT-4.1 for query generation, and Azure Cosmos DB for conversation history—all following Microsoft best practices.
+
+**CRITICAL: Research-First Development Approach**
+
+Before implementing ANY Azure feature or service integration, developers MUST:
+1. Search Microsoft Learn using `microsoft_docs_search` or `microsoft_code_sample_search` tools
+2. Review official patterns and current code examples from Microsoft documentation
+3. Verify authentication patterns, SDK versions, and service-specific limitations
+4. Never implement based on generic knowledge—always verify with current Microsoft Learn documentation first
+
+Workflow: **Research → Understand → Implement → Test**
 
 **Key architectural decisions:**
 - **Lakehouse SQL endpoint** chosen (vs KQL) → simpler SQL query generation
@@ -18,7 +28,7 @@ This project creates an intelligent chatbot that converts natural language quest
 
 2. **Set up Azure resources via Azure Portal or IaC**
    - Create Resource Group `rg-stuhackathon-dev`
-   - Provision **Azure OpenAI Service** with GPT-4 deployment
+   - Provision **Azure OpenAI Service** with GPT-4.1 deployment
    - Create **Azure Cosmos DB** (NoSQL API) for conversation history with container `chat-sessions`
    - Create **Azure Container Registry** for storing frontend container images
    - Create **Azure Container Apps Environment** for hosting the frontend
@@ -45,11 +55,12 @@ This project creates an intelligent chatbot that converts natural language quest
    - Create Dockerfile for containerized deployment with nginx
 
 5. **Create Azure Functions backend in `/api`**
+   - **IMPORTANT**: Before coding, search Microsoft Learn for "azure functions javascript v4", "azure openai javascript sdk", "cosmos db javascript sdk", and "fabric lakehouse sql endpoint" to get current patterns
    - Initialize Node.js Azure Functions project (v4 HTTP triggered function)
    - Install dependencies: `@azure/openai`, `@azure/cosmos`, `@azure/identity`, `@azure/msal-node`
    - Create `/api/chat` POST endpoint accepting `{ message, sessionId }`
    - Implement **conversation retrieval** from Cosmos DB by sessionId
-   - Build **Azure OpenAI integration** with system prompt including Fabric schema
+   - Build **Azure OpenAI GPT-4.1 integration** with system prompt including Fabric schema
    - Add **SQL query generation** logic with validation patterns
    - Implement **Fabric query execution** using SQL endpoint with Managed Identity
    - Store conversation turns in Cosmos DB with timestamp and query results
@@ -66,7 +77,8 @@ This project creates an intelligent chatbot that converts natural language quest
    - Add API key validation if Fabric Agent API requires it
 
 7. **Create prompt engineering templates**
-   - Design system prompt with Fabric schema injection
+   - **IMPORTANT**: Search Microsoft Learn for "azure openai chat completions" and "azure openai system message" before implementation
+   - Design system prompt with Fabric schema injection for GPT-4.1
    - Include example natural language → SQL pairs (few-shot learning)
    - Add conversation context summarization for token efficiency
    - Create fallback responses for ambiguous queries
@@ -126,11 +138,12 @@ This project creates an intelligent chatbot that converts natural language quest
 
 **Decisions**
 
-- **Chose Lakehouse SQL** over KQL → simpler for GPT-4, more familiar query language
+- **Chose Lakehouse SQL** over KQL → simpler for GPT-4.1, more familiar query language
 - **Cosmos DB** for sessions → fast key-value lookups, auto-expiry TTL, serverless pricing
 - **Stateful conversations** → better UX but adds complexity, uses conversation summarization to manage token costs
 - **Managed Identity** over API keys → eliminates credential management, more secure
 - **Container Apps** over Static Web Apps → provides containerization flexibility, better for dual backend architecture, full control over runtime
 - **Dual backend approach** → allows comparison between custom AI pipeline vs Fabric's native agent, provides fallback options, enables A/B testing
-- **GPT-4** over GPT-3.5 → better SQL generation accuracy, worth the cost for query reliability (Functions path)
+- **GPT-4.1** over GPT-3.5 → better SQL generation accuracy, worth the cost for query reliability (Functions path)
 - **Fabric Embedded Agent API** → leverages Fabric's native AI capabilities, potentially simpler but less customizable than Functions path
+- **Research-first development** → ensures implementation uses current Microsoft best practices and official code samples
