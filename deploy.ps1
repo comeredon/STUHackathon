@@ -184,23 +184,21 @@ if ($envExists) {
 
 # Build and push API image
 Write-Host "🔨 Building backend API image..." -ForegroundColor Cyan
-Set-Location -Path api
 az acr build `
   --registry $CONTAINER_REGISTRY `
   --image stuhackathon-api:latest `
-  --file Dockerfile `
-  .
-Set-Location -Path ..
+  --file api/Dockerfile `
+  --platform linux `
+  api
 
 # Build and push frontend image
 Write-Host "🔨 Building frontend image..." -ForegroundColor Cyan
-Set-Location -Path frontend
 az acr build `
   --registry $CONTAINER_REGISTRY `
   --image stuhackathon-frontend:latest `
-  --file Dockerfile `
-  .
-Set-Location -Path ..
+  --file frontend/Dockerfile `
+  --platform linux `
+  frontend
 
 # Deploy Backend API with Managed Identity
 Write-Host "🚀 Deploying backend API..." -ForegroundColor Cyan
