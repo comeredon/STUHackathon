@@ -9,6 +9,62 @@ echo "🚀 STUHackathon Deployment to Azure Container Apps"
 echo "================================================="
 echo ""
 
+# Configuration file path
+CONFIG_FILE=".deployment-config.json"
+
+# Function to load saved configuration
+load_config() {
+    if [ -f "$CONFIG_FILE" ]; then
+        echo "📂 Found saved configuration from previous deployment"
+        return 0
+    fi
+    return 1
+}
+
+# Function to get config value
+get_config_value() {
+    local key=$1
+    if [ -f "$CONFIG_FILE" ]; then
+        jq -r ".$key // empty" "$CONFIG_FILE" 2>/dev/null || echo ""
+    else
+        echo ""
+    fi
+}
+
+# Function to save configuration
+save_config() {
+    cat > "$CONFIG_FILE" << EOF
+{
+  "resourceGroup": "$RESOURCE_GROUP",
+  "location": "$LOCATION",
+  "foundryEndpoint": "$FOUNDRY_ENDPOINT",
+  "foundryResourceName": "$FOUNDRY_RESOURCE_NAME",
+  "foundryProjectId": "$FOUNDRY_PROJECT_ID",
+  "foundryAgentId": "$FOUNDRY_AGENT_ID",
+  "azureClientId": "$AZURE_CLIENT_ID",
+  "containerRegistry": "$CONTAINER_REGISTRY",
+  "environment": "$ENVIRONMENT",
+  "apiAppName": "$API_APP_NAME",
+  "frontendAppName": "$FRONTEND_APP_NAME",
+  "lastDeployment": "$(date '+%Y-%m-%d %H:%M:%S')"
+}
+EOF
+    echo "💾 Configuration saved for next deployment"
+}
+
+# Function to read with default
+read_with_default() {
+    local prompt=$1
+    local default=$2
+    if [ -n "$default" ]; then
+        read -p "$prompt [$default]: " value
+        echo "${value:-$default}"
+    else
+        read -p "$prompt: " value
+        echo "$value"
+    fi
+}
+
 # Login to Azure
 echo "📝 Logging in to Azure..."
 az login
@@ -17,8 +73,15 @@ echo ""
 echo "📋 Configuration:"
 echo ""
 
-# Prompt for resource group only
-read -p "Enter Resource Group name: " RESOURCE_GROUP
+# Load previous configuration if available
+if load_config; then
+    echo "💡 Using saved configuration as defaults (press Enter to accept)"
+    echo ""
+fi
+
+# Prompt for resource group with saved default
+SAVED_RG=$(get_config_value "resourceGroup")
+RESOURCE_GROUP=$(read_with_default "Enter Resource Group name" "$SAVED_RG")
 if [ -z "$RESOURCE_GROUP" ]; then
   echo "❌ Error: Resource group is required"
   exit 1
@@ -27,7 +90,8 @@ fi
 # Verify resource group exists or create it
 if ! az group show --name "$RESOURCE_GROUP" &>/dev/null; then
   echo "📦 Resource group '$RESOURCE_GROUP' does not exist."
-  read -p "Enter location to create it (e.g., eastus): " LOCATION
+  SAVED_LOCATION=$(get_config_value "location")
+  LOCATION=$(read_with_default "Enter location to create it (e.g., eastus)" "$SAVED_LOCATION")
   if [ -z "$LOCATION" ]; then
     echo "❌ Error: Location is required to create resource group"
     exit 1
@@ -53,33 +117,42 @@ if [ "$FOUNDRY_RESOURCE" != "null" ] && [ -n "$FOUNDRY_RESOURCE" ]; then
   echo "✅ Found Foundry resource: $FOUNDRY_RESOURCE_NAME"
   echo "✅ Endpoint: $FOUNDRY_ENDPOINT"
   
-  # Prompt for project and agent IDs
-  read -p "Enter Foundry Project ID [proj-default]: " FOUNDRY_PROJECT_ID
-  FOUNDRY_PROJECT_ID=${FOUNDRY_PROJECT_ID:-proj-default}
+  # Prompt for project and agent IDs with defaults
+  SAVED_PROJECT_ID=$(get_config_value "foundryProjectId")
+  FOUNDRY_PROJECT_ID=$(read_with_default "Enter Foundry Project ID" "${SAVED_PROJECT_ID:-proj-default}")
   
-  read -p "Enter Foundry Agent ID [Agent-Data]: " FOUNDRY_AGENT_ID
-  FOUNDRY_AGENT_ID=${FOUNDRY_AGENT_ID:-Agent-Data}
+  SAVED_AGENT_ID=$(get_config_value "foundryAgentId")
+  FOUNDRY_AGENT_ID=$(read_with_default "Enter Foundry Agent ID" "${SAVED_AGENT_ID:-Agent-Data}")
 else
   echo "⚠️  No Azure AI Foundry resource found in this resource group."
-  read -p "Enter Foundry endpoint URL: " FOUNDRY_ENDPOINT
-  read -p "Enter Foundry resource name: " FOUNDRY_RESOURCE_NAME
-  read -p "Enter Foundry Project ID: " FOUNDRY_PROJECT_ID
-  read -p "Enter Foundry Agent ID: " FOUNDRY_AGENT_ID
+  SAVED_ENDPOINT=$(get_config_value "foundryEndpoint")
+  FOUNDRY_ENDPOINT=$(read_with_default "Enter Foundry endpoint URL" "$SAVED_ENDPOINT")
+  
+  SAVED_RESOURCE_NAME=$(get_config_value "foundryResourceName")
+  FOUNDRY_RESOURCE_NAME=$(read_with_default "Enter Foundry resource name" "$SAVED_RESOURCE_NAME")
+  
+  SAVED_PROJECT_ID=$(get_config_value "foundryProjectId")
+  FOUNDRY_PROJECT_ID=$(read_with_default "Enter Foundry Project ID" "$SAVED_PROJECT_ID")
+  
+  SAVED_AGENT_ID=$(get_config_value "foundryAgentId")
+  FOUNDRY_AGENT_ID=$(read_with_default "Enter Foundry Agent ID" "$SAVED_AGENT_ID")
 fi
 
 # Auto-discover tenant ID from current login
 AZURE_TENANT_ID=$(az account show --query tenantId --output tsv)
 echo "✅ Using Tenant ID: $AZURE_TENANT_ID"
 
-# Auto-discover or prompt for Azure AD app registration
+# Auto-discover or prompt for Azure AD app registration with saved default
 echo "🔍 Looking for Azure AD app registrations..."
-AZURE_CLIENT_ID=$(az ad app list --show-mine --query "[0].appId" --output tsv 2>/dev/null)
-if [ -n "$AZURE_CLIENT_ID" ] && [ "$AZURE_CLIENT_ID" != "null" ]; then
-  echo "✅ Found Azure AD app: $AZURE_CLIENT_ID"
-  read -p "Use this app registration? (y/n) [y]: " USE_APP
-  if [[ $USE_APP =~ ^[Nn]$ ]]; then
-    read -p "Enter Azure AD Client ID: " AZURE_CLIENT_ID
-  fi
+DISCOVERED_CLIENT_ID=$(az ad app list --show-mine --query "[0].appId" --output tsv 2>/dev/null)
+SAVED_CLIENT_ID=$(get_config_value "azureClientId")
+
+# Use saved value if available, otherwise discovered value
+DEFAULT_CLIENT_ID="${SAVED_CLIENT_ID:-$DISCOVERED_CLIENT_ID}"
+
+if [ -n "$DEFAULT_CLIENT_ID" ] && [ "$DEFAULT_CLIENT_ID" != "null" ]; then
+  echo "💡 Found saved/discovered Azure AD app: $DEFAULT_CLIENT_ID"
+  AZURE_CLIENT_ID=$(read_with_default "Enter Azure AD Client ID (app registration)" "$DEFAULT_CLIENT_ID")
 else
   read -p "Enter Azure AD Client ID (app registration): " AZURE_CLIENT_ID
 fi
@@ -274,6 +347,12 @@ echo "   - Select your app (Client ID: $AZURE_CLIENT_ID)"
 echo "   - Add redirect URI: https://$FRONTEND_FQDN"
 echo "   - Add redirect URI: https://$FRONTEND_FQDN/.auth/login/aad/callback"
 echo ""
+
+# Save configuration for next time
+save_config
+
+echo ""
+echo "💡 Configuration saved! Next deployment will use these values as defaults."
 echo "2. Verify Foundry Managed Identity has access to Fabric workspace:"
 echo "   - Ensure the Foundry resource's Managed Identity has 'Contributor' role on Fabric workspace"
 echo ""
