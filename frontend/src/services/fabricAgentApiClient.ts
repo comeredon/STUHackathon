@@ -56,11 +56,6 @@ export class FabricAgentApiClient {
       
       return {
         success: true,
-        data: {
-          content,
-          projectId: FOUNDRY_PROJECT_ID,
-          agentId: FOUNDRY_AGENT_ID,
-        },
         message: content,
       };
     } catch (error) {
