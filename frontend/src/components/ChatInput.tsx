@@ -16,9 +16,13 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
     if (!SpeechRecognition) {
+      console.warn('Speech Recognition API not supported in this browser');
       setIsSupported(false);
       return;
     }
+
+    console.log('Speech Recognition API is supported');
+    setIsSupported(true);
 
     // Initialize speech recognition
     const recognition = new SpeechRecognition();
@@ -31,6 +35,7 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
         .map((result: any) => result[0].transcript)
         .join('');
       
+      console.log('Transcript:', transcript);
       setInput(transcript);
     };
 
@@ -40,10 +45,13 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
       
       if (event.error === 'not-allowed') {
         alert('Microphone access denied. Please enable microphone permissions in your browser settings.');
+      } else if (event.error === 'no-speech') {
+        alert('No speech detected. Please try again.');
       }
     };
 
     recognition.onend = () => {
+      console.log('Speech recognition ended');
       setIsListening(false);
     };
 
@@ -68,12 +76,19 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
     if (!recognitionRef.current) return;
 
     if (isListening) {
+      console.log('Stopping voice input');
       recognitionRef.current.stop();
       setIsListening(false);
     } else {
+      console.log('Starting voice input');
       setInput(''); // Clear input when starting new recording
-      recognitionRef.current.start();
-      setIsListening(true);
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (error) {
+        console.error('Failed to start speech recognition:', error);
+        alert('Failed to start voice input. Please try again.');
+      }
     }
   };
 
@@ -84,11 +99,27 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
         padding: '24px 32px 32px 32px',
         borderTop: '1px solid #e5e7f3',
         display: 'flex',
+        flexDirection: 'column',
         gap: '12px',
         backgroundColor: '#fafbff',
       }}
     >
-      <div style={{ flex: 1, position: 'relative' }}>
+      {!isSupported && (
+        <div
+          style={{
+            padding: '8px 12px',
+            backgroundColor: '#fef3c7',
+            borderRadius: '8px',
+            fontSize: '12px',
+            color: '#92400e',
+            textAlign: 'center',
+          }}
+        >
+          ⚠️ Voice input not supported in this browser. Try Chrome, Edge, or Safari.
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={{ flex: 1, position: 'relative' }}>
         <input
           type="text"
           value={input}
@@ -102,38 +133,46 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
             borderRadius: '16px',
             fontSize: '15px',
             outline: 'none',
-            transition: 'all 0.3s ease',
-            backgroundColor: isListening ? '#f8f9fe' : 'white',
-            fontFamily: 'inherit',
-            boxShadow: isListening ? '0 0 0 4px rgba(102, 126, 234, 0.1)' : 'none',
-          }}
-          onFocus={(e) => {
-            if (!isListening) {
-              e.currentTarget.style.borderColor = '#667eea';
-              e.currentTarget.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.1)';
-            }
-          }}
-          onBlur={(e) => {
-            if (!isListening) {
-              e.currentTarget.style.borderColor = '#e5e7f3';
-              e.currentTarget.style.boxShadow = 'none';
-            }
-          }}
-        />
-        {isSupported && (
-          <button
-            type="button"
-            onClick={toggleVoiceInput}
-            disabled={isLoading}
-            title={isListening ? 'Stop recording' : 'Start voice input'}
+            transition: 'all 0.3s ease', (Click to speak)'}
+            aria-label={isListening ? 'Stop recording' : 'Start voice input'}
             style={{
               position: 'absolute',
               right: '12px',
               top: '50%',
               transform: 'translateY(-50%)',
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
+              width: '44px',
+              height: '44px',
+              borderRadius: '12px',
+              border: isListening ? '2px solid #f5576c' : '2px solid transparent',
+              background: isListening
+                ? 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
+                : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '20px',
+              transition: 'all 0.3s ease',
+              boxShadow: isListening
+                ? '0 0 20px rgba(245, 87, 108, 0.6)'
+                : '0 3px 10px rgba(102, 126, 234, 0.4)',
+              animation: isListening ? 'pulse 1.5s ease-in-out infinite' : 'none',
+              zIndex: 10,
+            }}
+            onMouseEnter={(e) => {
+              if (!isLoading) {
+                e.currentTarget.style.transform = 'translateY(-50%) scale(1.15)';
+                e.currentTarget.style.boxShadow = isListening
+                  ? '0 0 25px rgba(245, 87, 108, 0.8)'
+                  : '0 5px 15px rgba(102, 126, 234, 0.6)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(-50%) scale(1)';
+              e.currentTarget.style.boxShadow = isListening
+                ? '0 0 20px rgba(245, 87, 108, 0.6)'
+                : '0 3px 10px rgba(102, 126, 234, 0.4
               border: 'none',
               background: isListening
                 ? 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
@@ -200,6 +239,7 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
             <span style={{ animation: 'pulse 1.5s ease-in-out infinite' }}>●</span>
             Sending
+      </div>
           </span>
         ) : (
           <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
