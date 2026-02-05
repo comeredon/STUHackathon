@@ -1,6 +1,7 @@
 import { ChatRequest, ChatResponse } from '../types/chat';
 
 const FOUNDRY_API_URL = import.meta.env.VITE_FOUNDRY_API_URL || '';
+const FOUNDRY_API_KEY = import.meta.env.VITE_FOUNDRY_API_KEY || '';
 
 /**
  * Azure AI Foundry API client with Fabric data agent
@@ -8,9 +9,11 @@ const FOUNDRY_API_URL = import.meta.env.VITE_FOUNDRY_API_URL || '';
  */
 export class FabricAgentApiClient {
   private apiUrl: string;
+  private apiKey: string;
 
-  constructor(apiUrl: string = FOUNDRY_API_URL) {
+  constructor(apiUrl: string = FOUNDRY_API_URL, apiKey: string = FOUNDRY_API_KEY) {
     this.apiUrl = apiUrl;
+    this.apiKey = apiKey;
   }
 
   async sendMessage(request: ChatRequest): Promise<ChatResponse> {
@@ -22,14 +25,21 @@ export class FabricAgentApiClient {
       };
     }
 
+    if (!this.apiKey) {
+      return {
+        success: false,
+        message: 'Azure AI Foundry API key is not configured',
+        error: 'VITE_FOUNDRY_API_KEY environment variable is missing',
+      };
+    }
+
     try {
       // Azure AI Foundry responses API expects a messages array
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Note: Authentication will be added when Azure AD token acquisition is implemented
-          // 'Authorization': `Bearer ${token}`,
+          'api-key': this.apiKey,
         },
         body: JSON.stringify({
           messages: [
