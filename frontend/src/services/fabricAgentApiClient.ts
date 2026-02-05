@@ -1,60 +1,73 @@
 import { ChatRequest, ChatResponse } from '../types/chat';
 
-const FABRIC_API_URL = import.meta.env.VITE_FABRIC_AGENT_API_URL || '';
-const FABRIC_API_KEY = import.meta.env.VITE_FABRIC_AGENT_API_KEY || '';
+const FOUNDRY_API_URL = import.meta.env.VITE_FOUNDRY_API_URL || '';
+const FOUNDRY_PROJECT_ID = import.meta.env.VITE_FOUNDRY_PROJECT_ID || '';
+const FOUNDRY_AGENT_ID = import.meta.env.VITE_FOUNDRY_AGENT_ID || '';
 
 /**
- * Fabric Embedded Agent API client
- * Leverages Fabric's native AI capabilities for query generation and execution
+ * Azure AI Foundry API client with Fabric data agent
+ * Uses Foundry's responses API for natural language to SQL conversion
  */
 export class FabricAgentApiClient {
   private apiUrl: string;
-  private apiKey: string;
 
-  constructor(apiUrl: string = FABRIC_API_URL, apiKey: string = FABRIC_API_KEY) {
+  constructor(apiUrl: string = FOUNDRY_API_URL) {
     this.apiUrl = apiUrl;
-    this.apiKey = apiKey;
   }
 
   async sendMessage(request: ChatRequest): Promise<ChatResponse> {
     if (!this.apiUrl) {
       return {
         success: false,
-        message: 'Fabric Agent API URL is not configured',
-        error: 'VITE_FABRIC_AGENT_API_URL environment variable is missing',
+        message: 'Azure AI Foundry API URL is not configured',
+        error: 'VITE_FOUNDRY_API_URL environment variable is missing',
       };
     }
 
     try {
+      // Azure AI Foundry responses API expects a messages array
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.apiKey && { 'Authorization': `Bearer ${this.apiKey}` }),
+          // Note: Authentication will be added when Azure AD token acquisition is implemented
+          // 'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          message: request.message,
-          sessionId: request.sessionId,
+          messages: [
+            {
+              role: 'user',
+              content: request.message,
+            },
+          ],
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
       const data = await response.json();
       
-      // Transform Fabric Agent response to match our unified format
+      // Transform Foundry response to unified format
+      // Foundry responses API returns choices array with message content
+      const content = data.choices?.[0]?.message?.content || data.message || 'No response';
+      
       return {
         success: true,
-        data: data.data,
-        message: data.message || 'Query executed successfully',
+        data: {
+          content,
+          projectId: FOUNDRY_PROJECT_ID,
+          agentId: FOUNDRY_AGENT_ID,
+        },
+        message: content,
       };
     } catch (error) {
-      console.error('Fabric Agent API error:', error);
+      console.error('Azure AI Foundry API error:', error);
       return {
         success: false,
-        message: 'Failed to communicate with Fabric Agent API',
+        message: 'Failed to communicate with Azure AI Foundry',
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
