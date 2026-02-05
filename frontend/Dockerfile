@@ -4,7 +4,11 @@ FROM node:18-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package.json ./
+COPY package-lock.json ./
+
+# Verify package-lock.json exists (debugging)
+RUN ls -la && echo "Checking for package-lock.json:" && test -f package-lock.json && echo "✓ package-lock.json found" || (echo "✗ package-lock.json NOT found" && exit 1)
 
 # Install dependencies
 RUN npm ci
