@@ -1,25 +1,20 @@
-# API Directory
+# Backend API - STUHackathon
 
-Azure Functions backend for the STUHackathon chatbot.
+Node.js + TypeScript + Express backend API for STUHackathon chatbot with Azure AI Foundry integration using **Managed Identity** and **On-Behalf-Of (OBO)** authentication flow.
+
+## 🔐 Security Architecture
+
+This backend implements a secure, keyless architecture:
+
+1. **User Authentication**: Frontend authenticates users with Azure AD
+2. **Token Forwarding**: Frontend sends user Bearer token to backend
+3. **On-Behalf-Of (OBO) Flow**: Backend exchanges user token for Azure AI Foundry access token
+4. **Managed Identity**: In production, Container App's Managed Identity is used for OBO exchange
+5. **No API Keys**: Zero secrets stored in code or configuration
 
 ## Setup
 
 ```bash
 npm install
-func start
-```
-
-## Functions
-
-- `chat/` - HTTP trigger for chat endpoint
-  - Accepts POST requests with `{ message, sessionId }`
-  - Integrates with Azure OpenAI
-  - Queries Microsoft Fabric Lakehouse
-  - Manages conversation history in Cosmos DB
-
-## Structure
-
-- `/chat` - Main chat function
-- `/utils` - Shared utilities (query validation, Fabric client)
-- `host.json` - Function host configuration
-- `local.settings.json` (not in repo) - Local environment variables
+npm run dev
+``

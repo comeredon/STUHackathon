@@ -1,54 +1,134 @@
-# STUHackathon - Azure AI Chatbot for Fabric
+# STUHackathon - Azure AI Chatbot for Fabric with Managed Identity
 
-An intelligent chatbot application that converts natural language questions into SQL queries for Microsoft Fabric Lakehouse, featuring dual backend connectivity and Azure AD authentication.
+An intelligent chatbot application that converts natural language questions into SQL queries for Microsoft Fabric Lakehouse, featuring **keyless authentication** with Managed Identity and On-Behalf-Of (OBO) flow.
 
 ## 🚀 Overview
 
-This project demonstrates a modern cloud-native architecture for building AI-powered chatbots that can query data warehouses using natural language. Users can ask questions like "Show me sales from last month" and receive formatted results from Microsoft Fabric Lakehouse.
+This project demonstrates a modern, secure cloud-native architecture for building AI-powered chatbots that can query data warehouses using natural language. Users authenticate with Azure AD, and the application maintains user context throughout the request chain using OBO flow—**no API keys required**.
 
 ### Key Features
 
-- 🤖 **Dual Backend Architecture**: Choose between custom Azure Functions pipeline or native Fabric Embedded Agent API
-- 🔐 **Azure AD Authentication**: Secure internal user access with Easy Auth
-- 💬 **Conversation Memory**: Stateful conversations with context awareness
-- 🎯 **Intent Recognition**: Azure OpenAI GPT-4 for natural language understanding and SQL generation
-- 🐳 **Containerized Frontend**: React app deployed on Azure Container Apps
-- 📊 **Microsoft Fabric Integration**: Direct Lakehouse SQL endpoint access
-- 🔒 **Security First**: Query validation, row limits, audit logging, and Managed Identity
+- 🔐 **Keyless Architecture**: Managed Identity + On-Behalf-Of flow (no API keys)
+- 👤 **User Context Preservation**: Maintains user identity through Azure AI Foundry
+- 🤖 **Azure AI Foundry Integration**: Native Fabric data agent capabilities
+- 💬 **Conversation Threads**: Stateful conversations managed by Foundry
+- 🐳 **Containerized**: Both frontend and backend on Azure Container Apps
+- 📊 **Microsoft Fabric Integration**: Direct Lakehouse query execution
+- 🔒 **Security Best Practices**: RBAC, rate limiting, CORS, audit logging
 
 ## 🏗️ Architecture
 
 ```
-User → Azure Container Apps (React) → Dual Backend Router
-                                        ├─ Path A: Azure Functions → Azure OpenAI → Fabric
-                                        └─ Path B: Fabric Embedded Agent API → Fabric
+User (Browser)
+  ↓ Azure AD Authentication
+Frontend (React SPA in Container Apps)
+  ↓ User Bearer Token
+Backend API (Node.js in Container Apps with Managed Identity)
+  ↓ On-Behalf-Of (OBO) Flow
+Azure AI Foundry (with Fabric Data Agent)
+  ↓ Managed Identity
+Microsoft Fabric Lakehouse
 ```
 
 ### Components
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **Frontend** | React + TypeScript + Vite | Chat UI with backend mode selector |
-| **Container Hosting** | Azure Container Apps | Scalable containerized frontend |
-| **Custom Backend** | Azure Functions (Node.js v4) | Custom AI pipeline with conversation memory |
-| **AI Service** | Azure OpenAI (GPT-4) | Natural language to SQL conversion |
-| **Native Backend** | Fabric Embedded Agent API | Fabric's built-in AI capabilities |
+| **Frontend** | React + TypeScript + Vite | Chat UI with Azure AD auth |
+| **Backend API** | Node.js + Express + TypeScript | OBO flow coordinator, no keys |
+| **Authentication** | Azure AD (MSAL) | User authentication |
+| **AI Service** | Azure AI Foundry | Managed AI agent platform |
+| **Data Agent** | Fabric Data Agent | Natural language to SQL |
 | **Data Warehouse** | Microsoft Fabric Lakehouse | SQL endpoint for data queries |
-| **Session Storage** | Azure Cosmos DB | Conversation history (custom path) |
-| **Authentication** | Azure AD + Easy Auth | Secure user access |
-| **CI/CD** | GitHub Actions | Automated container and function deployment |
+| **Identity** | Managed Identity | Keyless Azure service auth |
+| **Hosting** | Azure Container Apps | Scalable container platform |
 
 ## 📋 Prerequisites
 
 - Azure Subscription
 - GitHub Account
 - Microsoft Fabric Workspace with Lakehouse
+- Azure AI Foundry project with Fabric data agent enabled
 - Node.js 18+ and npm
 - Docker Desktop
 - Azure CLI
-- Azure Functions Core Tools v4
 
 ## 🎯 Quick Start
+
+### Option 1: Deploy to Azure (Recommended)
+
+```bash
+# Clone repository
+git clone https://github.com/comeredon/STUHackathon.git
+cd STUHackathon
+
+# Run deployment script (will prompt for configuration)
+chmod +x deploy.sh
+./deploy.sh
+```
+
+The script will prompt you for:
+- Resource group name (where Azure AI Foundry is deployed)
+- Azure AI Foundry details (endpoint, project ID, agent ID, resource name)
+- Azure AD configuration (tenant ID, client ID)
+- Container registry and app names
+
+The script will **automatically**:
+- ✅ Create Container Registry and Container Apps Environment
+- ✅ Build and deploy both backend and frontend containers
+- ✅ Enable system-assigned Managed Identity on backend API
+- ✅ Assign "Cognitive Services User" role to connect to Foundry
+- ✅ Assign "AcrPull" role for container image pulling
+- ✅ Configure environment variables with Foundry connection details
+
+See [Managed Identity Setup Guide](docs/MANAGED_IDENTITY_SETUP.md) for detailed instructions.
+
+### Option 2: Local Development
+
+**Backend API:**
+```bash
+cd api
+npm install
+cp .env.example .env
+# Edit .env with your Azure AI Foundry details
+npm run dev
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm install
+cp .env.example .env.local
+# Edit .env.local with your Azure AD app details
+npm run dev
+```
+
+## 🔐 Security Model
+
+### Keyless Authentication Flow
+
+1. **User Authentication** - User signs in with Azure AD via MSAL
+2. **Token Forwarding** - Frontend sends user token to backend API
+3. **On-Behalf-Of Exchange** - Backend uses Managed Identity to exchange user token for Foundry token
+4. **Azure AI Foundry Call** - Backend calls Foundry with delegated user permissions
+5. **Fabric Query** - Foundry agent queries Fabric Lakehouse with appropriate access controls
+
+### RBAC Requirements
+
+**Backend API Managed Identity needs:**
+- `Cognitive Services User` role on Azure AI Foundry resource
+
+**Azure AI Foundry Managed Identity needs:**
+- `Contributor` role on Microsoft Fabric Lakehouse workspace
+
+### No Keys Stored
+
+✅ **No API keys in code**  
+✅ **No secrets in environment variables** (production)  
+✅ **No connection strings hardcoded**  
+✅ **User permissions enforced end-to-end**  
+
+## 📂 Project Structure
 
 ### 1. Clone the Repository
 
