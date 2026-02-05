@@ -1,0 +1,10 @@
+{
+  "spa": {
+    "redirectUris": [
+      "https://app-stuhackathon-frontend.redisland-998a235a.eastus.azurecontainerapps.io"
+    ]
+  },
+  "web": {
+    "redirectUris": []
+  }
+}

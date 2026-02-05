@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useMsal, useIsAuthenticated } from '@azure/msal-react';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInput } from './ChatInput';
-import { BackendSelector } from './BackendSelector';
 import { chatService } from '../services/chatService';
 import { ChatMessage, BackendMode } from '../types/chat';
 
@@ -17,7 +16,7 @@ export function ChatContainer() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId] = useState(generateSessionId());
-  const [backendMode, setBackendMode] = useState<BackendMode>('functions');
+  const [backendMode] = useState<BackendMode>('fabric-agent');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -143,8 +142,18 @@ export function ChatContainer() {
         </div>
       </div>
 
-      {/* Backend Selector */}
-      <BackendSelector currentMode={backendMode} onModeChange={setBackendMode} />
+      {/* Info Banner */}
+      <div
+        style={{
+          padding: '12px 16px',
+          backgroundColor: '#f3f2f1',
+          borderBottom: '1px solid #edebe9',
+          fontSize: '14px',
+          color: '#605e5c',
+        }}
+      >
+        ℹ️ Connected to <strong>Azure AI Foundry</strong> with Microsoft Fabric data agent
+      </div>
 
       {/* Error Display */}
       {error && (
