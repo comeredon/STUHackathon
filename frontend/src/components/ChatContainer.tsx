@@ -3,25 +3,22 @@ import { useMsal, useIsAuthenticated } from '@azure/msal-react';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInput } from './ChatInput';
 import { chatService } from '../services/chatService';
-import { ChatMessage, BackendMode } from '../types/chat';
-
-// Generate a session ID for conversation tracking
-const generateSessionId = () => {
-  return `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-};
+import { useBackendApiClient } from '../services/backendApiClient';
+import { ChatMessage } from '../types/chat';
 
 export function ChatContainer() {
   const { instance, accounts } = useMsal();
   const isAuthenticated = useIsAuthenticated();
+  const backendApiClient = useBackendApiClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId] = useState(generateSessionId());
-  const [backendMode] = useState<BackendMode>('fabric-agent');
+  const [threadId, setThreadId] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    chatService.setMode(backendMode);
-  }, [backendMode]);
+    // Initialize chat service with backend API client
+    chatService.setApiClient(backendApiClient);
+  }, [backendApiClient]);
 
   const handleSendMessage = async (messageText: string) => {
     const userMessage: ChatMessage = {
@@ -37,16 +34,19 @@ export function ChatContainer() {
     try {
       const response = await chatService.sendMessage({
         message: messageText,
-        sessionId,
-        backendMode,
+        threadId,
       });
 
       if (response.success) {
+        // Update threadId for conversation continuity
+        if (response.threadId) {
+          setThreadId(response.threadId);
+        }
+
         const assistantMessage: ChatMessage = {
           role: 'assistant',
           content: response.message,
           timestamp: new Date().toISOString(),
-          query: response.data?.query,
         };
         setMessages((prev) => [...prev, assistantMessage]);
       } else {
@@ -152,7 +152,8 @@ export function ChatContainer() {
           color: '#605e5c',
         }}
       >
-        ℹ️ Connected to <strong>Azure AI Foundry</strong> with Microsoft Fabric data agent
+        ℹ️ Connected to <strong>Azure AI Foundry</strong> with Microsoft Fabric data agent via secure backend API
+        {threadId && <span style={{ marginLeft: '8px' }}>• Thread: {threadId.substring(0, 8)}...</span>}
       </div>
 
       {/* Error Display */}

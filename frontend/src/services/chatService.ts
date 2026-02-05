@@ -1,40 +1,27 @@
-import { BackendMode, ChatRequest, ChatResponse } from '../types/chat';
-import { functionsApiClient } from './functionsApiClient';
-import { fabricAgentApiClient } from './fabricAgentApiClient';
+import { ChatRequest, ChatResponse } from '../types/chat';
+import type { BackendApiClient } from './backendApiClient';
 
 /**
- * Unified chat service that routes requests to the appropriate backend
+ * Unified chat service using backend API with Managed Identity
+ * All requests go through the backend API which handles OBO flow to Foundry
  */
 export class ChatService {
-  private currentMode: BackendMode;
+  private apiClient: BackendApiClient | null = null;
 
-  constructor(initialMode: BackendMode = 'functions') {
-    this.currentMode = initialMode;
-  }
-
-  setMode(mode: BackendMode): void {
-    this.currentMode = mode;
-  }
-
-  getMode(): BackendMode {
-    return this.currentMode;
+  setApiClient(client: BackendApiClient): void {
+    this.apiClient = client;
   }
 
   async sendMessage(request: ChatRequest): Promise<ChatResponse> {
-    const mode = request.backendMode || this.currentMode;
-
-    switch (mode) {
-      case 'functions':
-        return functionsApiClient.sendMessage(request);
-      case 'fabric-agent':
-        return fabricAgentApiClient.sendMessage(request);
-      default:
-        return {
-          success: false,
-          message: 'Invalid backend mode',
-          error: `Unknown backend mode: ${mode}`,
-        };
+    if (!this.apiClient) {
+      return {
+        success: false,
+        message: 'API client not initialized',
+        error: 'Please ensure you are authenticated',
+      };
     }
+
+    return this.apiClient.sendMessage(request);
   }
 }
 

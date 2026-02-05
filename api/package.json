@@ -1,0 +1,39 @@
+{
+  "name": "stuhackathon-api",
+  "version": "1.0.0",
+  "description": "Backend API for STUHackathon with Azure AI Foundry integration using Managed Identity and OBO flow",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "watch": "nodemon --watch src --ext ts --exec ts-node src/index.ts"
+  },
+  "keywords": [
+    "azure",
+    "ai",
+    "foundry",
+    "managed-identity"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@azure/identity": "^4.5.0",
+    "@azure/core-auth": "^1.9.0",
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "helmet": "^8.0.0",
+    "dotenv": "^16.4.7",
+    "express-rate-limit": "^7.5.0",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/cors": "^2.8.17",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3",
+    "ts-node": "^10.9.2",
+    "nodemon": "^3.1.9"
+  }
+}
