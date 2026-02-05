@@ -14,75 +14,82 @@ echo "📝 Logging in to Azure..."
 az login
 
 echo ""
-echo "📋 Please provide deployment configuration:"
+echo "📋 Configuration:"
 echo ""
 
-# Prompt for resource group (where Azure AI Foundry is deployed)
-read -p "Enter Resource Group name (where Foundry is deployed): " RESOURCE_GROUP
+# Prompt for resource group only
+read -p "Enter Resource Group name: " RESOURCE_GROUP
 if [ -z "$RESOURCE_GROUP" ]; then
   echo "❌ Error: Resource group is required"
   exit 1
 fi
 
-# Verify resource group exists
+# Verify resource group exists or create it
 if ! az group show --name "$RESOURCE_GROUP" &>/dev/null; then
-  echo "❌ Error: Resource group '$RESOURCE_GROUP' does not exist"
-  exit 1
+  echo "📦 Resource group '$RESOURCE_GROUP' does not exist."
+  read -p "Enter location to create it (e.g., eastus): " LOCATION
+  if [ -z "$LOCATION" ]; then
+    echo "❌ Error: Location is required to create resource group"
+    exit 1
+  fi
+  echo "📦 Creating resource group..."
+  az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
 fi
 
-# Get location from existing resource group
+# Get location from resource group
 LOCATION=$(az group show --name "$RESOURCE_GROUP" --query location --output tsv)
 echo "✅ Using location: $LOCATION"
 
-# Prompt for other configuration
-read -p "Enter Container Registry name (will be created if not exists) [acrstuhackathon]: " CONTAINER_REGISTRY
-CONTAINER_REGISTRY=${CONTAINER_REGISTRY:-acrstuhackathon}
+# Auto-discover Azure AI Foundry resource
+echo "🔍 Discovering Azure AI Foundry resource..."
+FOUNDRY_RESOURCE=$(az cognitiveservices account list \
+  --resource-group "$RESOURCE_GROUP" \
+  --query "[?kind=='AIServices' || kind=='CognitiveServices'].{name:name,endpoint:properties.endpoint}" \
+  --output json 2>/dev/null | jq -r '.[0]')
 
-read -p "Enter Container Apps Environment name [env-stuhackathon]: " ENVIRONMENT
-ENVIRONMENT=${ENVIRONMENT:-env-stuhackathon}
-
-read -p "Enter Azure AI Foundry endpoint: " FOUNDRY_ENDPOINT
-if [ -z "$FOUNDRY_ENDPOINT" ]; then
-  echo "❌ Error: Foundry endpoint is required"
-  exit 1
+if [ "$FOUNDRY_RESOURCE" != "null" ] && [ -n "$FOUNDRY_RESOURCE" ]; then
+  FOUNDRY_RESOURCE_NAME=$(echo $FOUNDRY_RESOURCE | jq -r '.name')
+  FOUNDRY_ENDPOINT=$(echo $FOUNDRY_RESOURCE | jq -r '.endpoint')
+  echo "✅ Found Foundry resource: $FOUNDRY_RESOURCE_NAME"
+  echo "✅ Endpoint: $FOUNDRY_ENDPOINT"
+  
+  # Prompt for project and agent IDs
+  read -p "Enter Foundry Project ID [proj-default]: " FOUNDRY_PROJECT_ID
+  FOUNDRY_PROJECT_ID=${FOUNDRY_PROJECT_ID:-proj-default}
+  
+  read -p "Enter Foundry Agent ID [Agent-Data]: " FOUNDRY_AGENT_ID
+  FOUNDRY_AGENT_ID=${FOUNDRY_AGENT_ID:-Agent-Data}
+else
+  echo "⚠️  No Azure AI Foundry resource found in this resource group."
+  read -p "Enter Foundry endpoint URL: " FOUNDRY_ENDPOINT
+  read -p "Enter Foundry resource name: " FOUNDRY_RESOURCE_NAME
+  read -p "Enter Foundry Project ID: " FOUNDRY_PROJECT_ID
+  read -p "Enter Foundry Agent ID: " FOUNDRY_AGENT_ID
 fi
 
-read -p "Enter Foundry Project ID: " FOUNDRY_PROJECT_ID
-if [ -z "$FOUNDRY_PROJECT_ID" ]; then
-  echo "❌ Error: Foundry Project ID is required"
-  exit 1
+# Auto-discover tenant ID from current login
+AZURE_TENANT_ID=$(az account show --query tenantId --output tsv)
+echo "✅ Using Tenant ID: $AZURE_TENANT_ID"
+
+# Auto-discover or prompt for Azure AD app registration
+echo "🔍 Looking for Azure AD app registrations..."
+AZURE_CLIENT_ID=$(az ad app list --show-mine --query "[0].appId" --output tsv 2>/dev/null)
+if [ -n "$AZURE_CLIENT_ID" ] && [ "$AZURE_CLIENT_ID" != "null" ]; then
+  echo "✅ Found Azure AD app: $AZURE_CLIENT_ID"
+  read -p "Use this app registration? (y/n) [y]: " USE_APP
+  if [[ $USE_APP =~ ^[Nn]$ ]]; then
+    read -p "Enter Azure AD Client ID: " AZURE_CLIENT_ID
+  fi
+else
+  read -p "Enter Azure AD Client ID (app registration): " AZURE_CLIENT_ID
 fi
 
-read -p "Enter Foundry Agent ID: " FOUNDRY_AGENT_ID
-if [ -z "$FOUNDRY_AGENT_ID" ]; then
-  echo "❌ Error: Foundry Agent ID is required"
-  exit 1
-fi
-
-read -p "Enter Azure AI Foundry resource name: " FOUNDRY_RESOURCE_NAME
-if [ -z "$FOUNDRY_RESOURCE_NAME" ]; then
-  echo "❌ Error: Foundry resource name is required (e.g., aif-multiagentkuy2y)"
-  exit 1
-fi
-
-read -p "Enter Azure Tenant ID: " AZURE_TENANT_ID
-if [ -z "$AZURE_TENANT_ID" ]; then
-  echo "❌ Error: Azure Tenant ID is required"
-  exit 1
-fi
-
-read -p "Enter Azure Client ID (frontend app registration): " AZURE_CLIENT_ID
-if [ -z "$AZURE_CLIENT_ID" ]; then
-  echo "❌ Error: Azure Client ID is required"
-  exit 1
-fi
-
-# App names
-read -p "Enter Backend API app name [app-stuhackathon-api]: " API_APP_NAME
-API_APP_NAME=${API_APP_NAME:-app-stuhackathon-api}
-
-read -p "Enter Frontend app name [app-stuhackathon-frontend]: " FRONTEND_APP_NAME
-FRONTEND_APP_NAME=${FRONTEND_APP_NAME:-app-stuhackathon-frontend}
+# Set default names
+CONTAINER_REGISTRY="acr${RESOURCE_GROUP//[^a-zA-Z0-9]/}"
+CONTAINER_REGISTRY=${CONTAINER_REGISTRY:0:50}  # ACR name max 50 chars
+ENVIRONMENT="env-stuhackathon"
+API_APP_NAME="app-stuhackathon-api"
+FRONTEND_APP_NAME="app-stuhackathon-frontend"
 
 echo ""
 echo "📋 Configuration Summary:"

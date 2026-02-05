@@ -10,76 +10,86 @@ Write-Host "📝 Logging in to Azure..." -ForegroundColor Cyan
 az login
 
 Write-Host ""
-Write-Host "📋 Please provide deployment configuration:" -ForegroundColor Cyan
+Write-Host "📋 Configuration:" -ForegroundColor Cyan
 Write-Host ""
 
-# Prompt for resource group (where Azure AI Foundry is deployed)
-$RESOURCE_GROUP = Read-Host "Enter Resource Group name (where Foundry is deployed)"
+# Prompt for resource group only
+$RESOURCE_GROUP = Read-Host "Enter Resource Group name"
 if ([string]::IsNullOrWhiteSpace($RESOURCE_GROUP)) {
     Write-Host "❌ Error: Resource group is required" -ForegroundColor Red
     exit 1
 }
 
-# Verify resource group exists
+# Verify resource group exists or create it
 $rgExists = az group show --name $RESOURCE_GROUP 2>$null
 if (-not $rgExists) {
-    Write-Host "❌ Error: Resource group '$RESOURCE_GROUP' does not exist" -ForegroundColor Red
-    exit 1
+    Write-Host "📦 Resource group '$RESOURCE_GROUP' does not exist." -ForegroundColor Yellow
+    $LOCATION = Read-Host "Enter location to create it (e.g., eastus)"
+    if ([string]::IsNullOrWhiteSpace($LOCATION)) {
+        Write-Host "❌ Error: Location is required to create resource group" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "📦 Creating resource group..." -ForegroundColor Cyan
+    az group create --name $RESOURCE_GROUP --location $LOCATION
 }
 
-# Get location from existing resource group
+# Get location from resource group
 $LOCATION = az group show --name $RESOURCE_GROUP --query location --output tsv
 Write-Host "✅ Using location: $LOCATION" -ForegroundColor Green
 
-# Prompt for other configuration
-$inputRegistry = Read-Host "Enter Container Registry name (will be created if not exists) [acrstuhackathon]"
-$CONTAINER_REGISTRY = if ([string]::IsNullOrWhiteSpace($inputRegistry)) { "acrstuhackathon" } else { $inputRegistry }
+# Auto-discover Azure AI Foundry resource
+Write-Host "🔍 Discovering Azure AI Foundry resource..." -ForegroundColor Cyan
+$foundryJson = az cognitiveservices account list `
+  --resource-group $RESOURCE_GROUP `
+  --query "[?kind=='AIServices' || kind=='CognitiveServices'].{name:name,endpoint:properties.endpoint}" `
+  --output json 2>$null
 
-$inputEnv = Read-Host "Enter Container Apps Environment name [env-stuhackathon]"
-$ENVIRONMENT = if ([string]::IsNullOrWhiteSpace($inputEnv)) { "env-stuhackathon" } else { $inputEnv }
-
-$FOUNDRY_ENDPOINT = Read-Host "Enter Azure AI Foundry endpoint"
-if ([string]::IsNullOrWhiteSpace($FOUNDRY_ENDPOINT)) {
-    Write-Host "❌ Error: Foundry endpoint is required" -ForegroundColor Red
-    exit 1
+if ($foundryJson) {
+    $foundryResource = $foundryJson | ConvertFrom-Json | Select-Object -First 1
+    if ($foundryResource) {
+        $FOUNDRY_RESOURCE_NAME = $foundryResource.name
+        $FOUNDRY_ENDPOINT = $foundryResource.endpoint
+        Write-Host "✅ Found Foundry resource: $FOUNDRY_RESOURCE_NAME" -ForegroundColor Green
+        Write-Host "✅ Endpoint: $FOUNDRY_ENDPOINT" -ForegroundColor Green
+        
+        # Prompt for project and agent IDs
+        $input = Read-Host "Enter Foundry Project ID [proj-default]"
+        $FOUNDRY_PROJECT_ID = if ([string]::IsNullOrWhiteSpace($input)) { "proj-default" } else { $input }
+        
+        $input = Read-Host "Enter Foundry Agent ID [Agent-Data]"
+        $FOUNDRY_AGENT_ID = if ([string]::IsNullOrWhiteSpace($input)) { "Agent-Data" } else { $input }
+    }
+} else {
+    Write-Host "⚠️  No Azure AI Foundry resource found in this resource group." -ForegroundColor Yellow
+    $FOUNDRY_ENDPOINT = Read-Host "Enter Foundry endpoint URL"
+    $FOUNDRY_RESOURCE_NAME = Read-Host "Enter Foundry resource name"
+    $FOUNDRY_PROJECT_ID = Read-Host "Enter Foundry Project ID"
+    $FOUNDRY_AGENT_ID = Read-Host "Enter Foundry Agent ID"
 }
 
-$FOUNDRY_PROJECT_ID = Read-Host "Enter Foundry Project ID"
-if ([string]::IsNullOrWhiteSpace($FOUNDRY_PROJECT_ID)) {
-    Write-Host "❌ Error: Foundry Project ID is required" -ForegroundColor Red
-    exit 1
+# Auto-discover tenant ID from current login
+$AZURE_TENANT_ID = az account show --query tenantId --output tsv
+Write-Host "✅ Using Tenant ID: $AZURE_TENANT_ID" -ForegroundColor Green
+
+# Auto-discover or prompt for Azure AD app registration
+Write-Host "🔍 Looking for Azure AD app registrations..." -ForegroundColor Cyan
+$AZURE_CLIENT_ID = az ad app list --show-mine --query "[0].appId" --output tsv 2>$null
+if ($AZURE_CLIENT_ID -and $AZURE_CLIENT_ID -ne "null") {
+    Write-Host "✅ Found Azure AD app: $AZURE_CLIENT_ID" -ForegroundColor Green
+    $useApp = Read-Host "Use this app registration? (y/n) [y]"
+    if ($useApp -eq 'n' -or $useApp -eq 'N') {
+        $AZURE_CLIENT_ID = Read-Host "Enter Azure AD Client ID"
+    }
+} else {
+    $AZURE_CLIENT_ID = Read-Host "Enter Azure AD Client ID (app registration)"
 }
 
-$FOUNDRY_AGENT_ID = Read-Host "Enter Foundry Agent ID"
-if ([string]::IsNullOrWhiteSpace($FOUNDRY_AGENT_ID)) {
-    Write-Host "❌ Error: Foundry Agent ID is required" -ForegroundColor Red
-    exit 1
-}
-
-$FOUNDRY_RESOURCE_NAME = Read-Host "Enter Azure AI Foundry resource name"
-if ([string]::IsNullOrWhiteSpace($FOUNDRY_RESOURCE_NAME)) {
-    Write-Host "❌ Error: Foundry resource name is required (e.g., aif-multiagentkuy2y)" -ForegroundColor Red
-    exit 1
-}
-
-$AZURE_TENANT_ID = Read-Host "Enter Azure Tenant ID"
-if ([string]::IsNullOrWhiteSpace($AZURE_TENANT_ID)) {
-    Write-Host "❌ Error: Azure Tenant ID is required" -ForegroundColor Red
-    exit 1
-}
-
-$AZURE_CLIENT_ID = Read-Host "Enter Azure Client ID (frontend app registration)"
-if ([string]::IsNullOrWhiteSpace($AZURE_CLIENT_ID)) {
-    Write-Host "❌ Error: Azure Client ID is required" -ForegroundColor Red
-    exit 1
-}
-
-# App names
-$inputApiName = Read-Host "Enter Backend API app name [app-stuhackathon-api]"
-$API_APP_NAME = if ([string]::IsNullOrWhiteSpace($inputApiName)) { "app-stuhackathon-api" } else { $inputApiName }
-
-$inputFrontendName = Read-Host "Enter Frontend app name [app-stuhackathon-frontend]"
-$FRONTEND_APP_NAME = if ([string]::IsNullOrWhiteSpace($inputFrontendName)) { "app-stuhackathon-frontend" } else { $inputFrontendName }
+# Set default names
+$CONTAINER_REGISTRY = "acr" + ($RESOURCE_GROUP -replace '[^a-zA-Z0-9]','')
+$CONTAINER_REGISTRY = $CONTAINER_REGISTRY.Substring(0, [Math]::Min(50, $CONTAINER_REGISTRY.Length))  # ACR name max 50 chars
+$ENVIRONMENT = "env-stuhackathon"
+$API_APP_NAME = "app-stuhackathon-api"
+$FRONTEND_APP_NAME = "app-stuhackathon-frontend"
 
 Write-Host ""
 Write-Host "📋 Configuration Summary:" -ForegroundColor Cyan
