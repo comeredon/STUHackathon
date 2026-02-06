@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { validateToken } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
-import { createFoundryClient } from '../services/foundryClient';
+import { getMcpClient } from '../services/mcpClient';
 
 const router = Router();
 
@@ -14,7 +13,7 @@ interface ChatResponse {
   success: boolean;
   data?: {
     content: string;
-    threadId: string;
+    threadId?: string;
     runId?: string;
   };
   message: string;
@@ -23,11 +22,11 @@ interface ChatResponse {
 
 /**
  * POST /api/chat
- * Send a message to Azure AI Foundry agent using user's credentials
+ * Send a message to Fabric Data Agent via MCP
+ * No authentication required
  */
-router.post('/', validateToken, asyncHandler(async (req: Request, res: Response) => {
-  const { message, threadId }: ChatRequest = req.body;
-  const userToken = (req as any).userToken;
+router.post('/', asyncHandler(async (req: Request, res: Response) => {
+  const { message }: ChatRequest = req.body;
 
   if (!message) {
     return res.status(400).json({
@@ -37,41 +36,74 @@ router.post('/', validateToken, asyncHandler(async (req: Request, res: Response)
   }
 
   try {
-    // Create Foundry client with user's token (OBO flow)
-    const foundryClient = await createFoundryClient(userToken);
+    console.log(`Chat request: "${message}"`);
+    
+    // Get the MCP client (uses singleton pattern)
+    const mcpClient = await getMcpClient();
 
-    // Create or use existing thread
-    const currentThreadId = threadId || await foundryClient.createThread();
-
-    // Post message to thread
-    await foundryClient.postMessage(currentThreadId, message);
-
-    // Create run
-    const runId = await foundryClient.createRun(currentThreadId);
-
-    // Poll for completion
-    const result = await foundryClient.waitForCompletion(currentThreadId, runId);
-
-    // Get agent response
-    const response = await foundryClient.getLatestMessage(currentThreadId);
+    // Send message to Fabric Data Agent via MCP
+    const response = await mcpClient.sendMessage(message);
 
     const chatResponse: ChatResponse = {
       success: true,
       data: {
-        content: response,
-        threadId: currentThreadId,
-        runId
+        content: response
       },
-      message: 'Response received successfully'
+      message: 'Response received from Fabric Data Agent'
     };
 
     res.json(chatResponse);
   } catch (error: any) {
-    console.error('Chat error:', error);
+    console.error('MCP Chat error:', error);
     
     const chatResponse: ChatResponse = {
       success: false,
-      message: 'Failed to process chat request',
+      message: 'Failed to process chat request via MCP',
+      error: error.message || 'Unknown error occurred'
+    };
+
+    res.status(500).json(chatResponse);
+  }
+}));
+
+/**
+ * POST /api/chat/demo
+ * Alias for main endpoint (for backwards compatibility)
+ */
+router.post('/demo', asyncHandler(async (req: Request, res: Response) => {
+  const { message }: ChatRequest = req.body;
+
+  if (!message) {
+    return res.status(400).json({
+      success: false,
+      error: 'Message is required'
+    });
+  }
+
+  try {
+    console.log(`Demo chat request: "${message}"`);
+    
+    // Get the MCP client (uses singleton pattern)
+    const mcpClient = await getMcpClient();
+
+    // Send message to Fabric Data Agent via MCP
+    const response = await mcpClient.sendMessage(message);
+
+    const chatResponse: ChatResponse = {
+      success: true,
+      data: {
+        content: response
+      },
+      message: 'Response received from Fabric Data Agent'
+    };
+
+    res.json(chatResponse);
+  } catch (error: any) {
+    console.error('MCP Chat error:', error);
+    
+    const chatResponse: ChatResponse = {
+      success: false,
+      message: 'Failed to process chat request via MCP',
       error: error.message || 'Unknown error occurred'
     };
 

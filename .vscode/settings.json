@@ -1,5 +1,9 @@
 {
     "chat.tools.terminal.autoApprove": {
-        "npm init": true
+        "npm init": true,
+        "/^az containerapp list --resource-group rg-reportinghub --query \"\\[\\]\\.\\{name:name, fqdn:properties\\.configuration\\.ingress\\.fqdn\\}\" -o table$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

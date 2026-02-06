@@ -1,4 +1,4 @@
-import { DefaultAzureCredential, OnBehalfOfCredentialOptions, OnBehalfOfCredential } from '@azure/identity';
+import { DefaultAzureCredential, OnBehalfOfCredential } from '@azure/identity';
 
 const FOUNDRY_ENDPOINT = process.env.FOUNDRY_ENDPOINT || '';
 const FOUNDRY_PROJECT_ID = process.env.FOUNDRY_PROJECT_ID || '';
@@ -64,7 +64,7 @@ export class FoundryClient {
           clientId: AZURE_CLIENT_ID,
           clientSecret: AZURE_CLIENT_SECRET,
           userAssertionToken: this.userToken
-        } as OnBehalfOfCredentialOptions);
+        });
 
         const tokenResponse = await oboCredential.getToken([
           'https://cognitiveservices.azure.com/.default'

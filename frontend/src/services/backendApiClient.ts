@@ -1,19 +1,155 @@
-import { useMsal } from '@azure/msal-react';
 import { ChatRequest, ChatResponse } from '../types/chat';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+// Read API URL from runtime config (injected by Docker entrypoint) or Vite env
+const getApiUrl = (): string => {
+  const appConfig = (window as any).APP_CONFIG;
+  if (appConfig?.VITE_API_URL) {
+    return appConfig.VITE_API_URL;
+  }
+  return import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+};
+
+const API_URL = getApiUrl();
+
+// Cache configuration
+const CACHE_ENABLED = true;
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes TTL
+const MAX_CACHE_SIZE = 100; // Maximum number of cached entries
+
+interface CacheEntry {
+  response: ChatResponse;
+  timestamp: number;
+}
 
 /**
- * Backend API client with user authentication via Bearer token
- * Uses On-Behalf-Of (OBO) flow for Azure AI Foundry access
+ * Simple in-memory cache for chat responses
+ */
+class ResponseCache {
+  private cache: Map<string, CacheEntry> = new Map();
+
+  /**
+   * Generate a cache key from the message (normalized)
+   */
+  private generateKey(message: string): string {
+    return message.toLowerCase().trim();
+  }
+
+  /**
+   * Check if entry is expired
+   */
+  private isExpired(entry: CacheEntry): boolean {
+    return Date.now() - entry.timestamp > CACHE_TTL_MS;
+  }
+
+  /**
+   * Evict oldest entries if cache is full
+   */
+  private evictOldest(): void {
+    if (this.cache.size >= MAX_CACHE_SIZE) {
+      // Find and remove the oldest entry
+      let oldestKey: string | null = null;
+      let oldestTime = Infinity;
+      
+      for (const [key, entry] of this.cache.entries()) {
+        if (entry.timestamp < oldestTime) {
+          oldestTime = entry.timestamp;
+          oldestKey = key;
+        }
+      }
+      
+      if (oldestKey) {
+        this.cache.delete(oldestKey);
+      }
+    }
+  }
+
+  /**
+   * Get cached response if available and not expired
+   */
+  get(message: string): ChatResponse | null {
+    const key = this.generateKey(message);
+    const entry = this.cache.get(key);
+    
+    if (!entry) {
+      return null;
+    }
+    
+    if (this.isExpired(entry)) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    console.log(`🎯 Cache hit for: "${message.substring(0, 50)}..."`);
+    return entry.response;
+  }
+
+  /**
+   * Store response in cache
+   */
+  set(message: string, response: ChatResponse): void {
+    if (!response.success) {
+      // Don't cache error responses
+      return;
+    }
+    
+    this.evictOldest();
+    
+    const key = this.generateKey(message);
+    this.cache.set(key, {
+      response,
+      timestamp: Date.now(),
+    });
+    
+    console.log(`💾 Cached response for: "${message.substring(0, 50)}..." (${this.cache.size} entries)`);
+  }
+
+  /**
+   * Clear all cached entries
+   */
+  clear(): void {
+    this.cache.clear();
+    console.log('🗑️ Cache cleared');
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getStats(): { size: number; maxSize: number; ttlMinutes: number } {
+    return {
+      size: this.cache.size,
+      maxSize: MAX_CACHE_SIZE,
+      ttlMinutes: CACHE_TTL_MS / 60000,
+    };
+  }
+}
+
+// Singleton cache instance
+const responseCache = new ResponseCache();
+
+/**
+ * Backend API client - no authentication required
+ * Calls the demo endpoint that uses Fabric Data Agent via MCP
+ * Includes response caching for repeated questions
  */
 export class BackendApiClient {
   private apiUrl: string;
-  private getToken: () => Promise<string>;
 
-  constructor(apiUrl: string, getToken: () => Promise<string>) {
+  constructor(apiUrl: string = API_URL) {
     this.apiUrl = apiUrl;
-    this.getToken = getToken;
+  }
+
+  /**
+   * Clear the response cache
+   */
+  clearCache(): void {
+    responseCache.clear();
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats() {
+    return responseCache.getStats();
   }
 
   async sendMessage(request: ChatRequest): Promise<ChatResponse> {
@@ -25,15 +161,23 @@ export class BackendApiClient {
       };
     }
 
-    try {
-      // Get user's access token
-      const token = await this.getToken();
+    // Check cache first (if enabled)
+    if (CACHE_ENABLED) {
+      const cachedResponse = responseCache.get(request.message);
+      if (cachedResponse) {
+        // Return cached response with a note
+        return {
+          ...cachedResponse,
+          message: cachedResponse.message + '\n\n---\n*⚡ Cached response*',
+        };
+      }
+    }
 
-      const response = await fetch(`${this.apiUrl}/chat`, {
+    try {
+      const response = await fetch(`${this.apiUrl}/chat/demo`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           message: request.message,
@@ -49,11 +193,18 @@ export class BackendApiClient {
       const data = await response.json();
 
       if (data.success) {
-        return {
+        const chatResponse: ChatResponse = {
           success: true,
           message: data.data.content,
           threadId: data.data.threadId,
         };
+
+        // Cache the successful response
+        if (CACHE_ENABLED) {
+          responseCache.set(request.message, chatResponse);
+        }
+
+        return chatResponse;
       } else {
         return {
           success: false,
@@ -71,31 +222,3 @@ export class BackendApiClient {
     }
   }
 }
-
-/**
- * Hook to create BackendApiClient with MSAL token
- */
-export const useBackendApiClient = (): BackendApiClient => {
-  const { instance, accounts } = useMsal();
-
-  const getToken = async (): Promise<string> => {
-    if (accounts.length === 0) {
-      throw new Error('No authenticated user');
-    }
-
-    const request = {
-      scopes: ['https://cognitiveservices.azure.com/.default'],
-      account: accounts[0],
-    };
-
-    try {
-      const response = await instance.acquireTokenSilent(request);
-      return response.accessToken;
-    } catch (error) {
-      console.error('Token acquisition failed:', error);
-      throw new Error('Failed to acquire authentication token');
-    }
-  };
-
-  return new BackendApiClient(API_URL, getToken);
-};

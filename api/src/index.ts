@@ -12,8 +12,14 @@ dotenv.config();
 const app: Express = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy (required behind Container Apps / reverse proxy)
+app.set('trust proxy', 1);
+
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false,
+}));
 
 // CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173'];
@@ -68,6 +74,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔒 Managed Identity: ${process.env.USE_MANAGED_IDENTITY === 'true' ? 'Enabled' : 'Disabled'}`);
+  console.log(`🔗 MCP Server: ${process.env.MCP_SERVER_URL ? 'Configured' : 'Not configured'}`);
 });
 
 export default app;

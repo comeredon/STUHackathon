@@ -1,24 +1,21 @@
 import { useState, useEffect } from 'react';
-import { useMsal, useIsAuthenticated } from '@azure/msal-react';
 import { ChatMessageList } from './ChatMessageList';
 import { ChatInput } from './ChatInput';
 import { chatService } from '../services/chatService';
-import { useBackendApiClient } from '../services/backendApiClient';
+import { BackendApiClient } from '../services/backendApiClient';
 import { ChatMessage } from '../types/chat';
 
 export function ChatContainer() {
-  const { instance, accounts } = useMsal();
-  const isAuthenticated = useIsAuthenticated();
-  const backendApiClient = useBackendApiClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [threadId, setThreadId] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Initialize chat service with backend API client
-    chatService.setApiClient(backendApiClient);
-  }, [backendApiClient]);
+    // Initialize chat service with backend API client (no auth needed)
+    const apiClient = new BackendApiClient();
+    chatService.setApiClient(apiClient);
+  }, []);
 
   const handleSendMessage = async (messageText: string) => {
     const userMessage: ChatMessage = {
@@ -71,31 +68,6 @@ export function ChatContainer() {
       setIsLoading(false);
     }
   };
-
-  const handleLogout = () => {
-    instance.logoutPopup();
-  };
-
-  if (!isAuthenticated) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-          backgroundColor: '#f3f2f1',
-        }}
-      >
-        <div style={{ textAlign: 'center' }}>
-          <h1>Please sign in to continue</h1>
-          <p>Authenticating with Azure AD...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const userName = accounts[0]?.name || accounts[0]?.username || 'User';
 
   return (
     <div
@@ -158,37 +130,7 @@ export function ChatContainer() {
               </p>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '13px', opacity: 0.85, marginBottom: '2px' }}>Welcome back</div>
-              <div style={{ fontSize: '15px', fontWeight: '600' }}>{userName}</div>
-            </div>
-            <button
-              onClick={handleLogout}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: 'rgba(255, 255, 255, 0.25)',
-                color: 'white',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-                borderRadius: '10px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                fontSize: '14px',
-                backdropFilter: 'blur(10px)',
-                transition: 'all 0.3s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)';
-                e.currentTarget.style.transform = 'translateY(-1px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-            >
-              Sign Out
-            </button>
-          </div>
+
         </div>
 
         {/* Info Banner */}
