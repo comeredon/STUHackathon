@@ -4,10 +4,14 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import path from 'path';
 import chatRouter from './routes/chat';
 import { errorHandler } from './middleware/errorHandler';
 
-dotenv.config();
+// Load .env from the same directory as the compiled JS (dist) or one level up from src
+const envPath = path.resolve(__dirname, '..', '.env');
+dotenv.config({ path: envPath });
+console.log(`Loading environment from: ${envPath}`);
 
 const app: Express = express();
 const PORT = process.env.PORT || 3000;

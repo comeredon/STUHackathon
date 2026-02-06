@@ -2,15 +2,28 @@ import { useEffect, useState } from 'react';
 import { MsalProvider, MsalAuthenticationTemplate } from '@azure/msal-react';
 import { PublicClientApplication, InteractionType } from '@azure/msal-browser';
 import { msalConfig, loginRequest } from './auth/authConfig';
-import { ChatContainer } from './components/ChatContainer';
+import { ChatContainer, AuthenticatedChatContainer } from './components/ChatContainer';
 
 // Create MSAL instance
 const msalInstance = new PublicClientApplication(msalConfig);
 
+// Check if we're in demo mode (local development without auth)
+const isDemoMode = () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('demo') === 'true' || import.meta.env.VITE_DEMO_MODE === 'true';
+};
+
 function App() {
   const [isInitialized, setIsInitialized] = useState(false);
+  const demoMode = isDemoMode();
 
   useEffect(() => {
+    // Skip MSAL initialization in demo mode
+    if (demoMode) {
+      setIsInitialized(true);
+      return;
+    }
+
     // Initialize MSAL and handle redirect
     const initializeMsal = async () => {
       try {
@@ -24,7 +37,7 @@ function App() {
     };
 
     initializeMsal();
-  }, []);
+  }, [demoMode]);
 
   if (!isInitialized) {
     return (
@@ -45,13 +58,18 @@ function App() {
     );
   }
 
+  // Demo mode: render ChatContainer directly without auth
+  if (demoMode) {
+    return <ChatContainer demoMode={true} />;
+  }
+
   return (
     <MsalProvider instance={msalInstance}>
       <MsalAuthenticationTemplate
         interactionType={InteractionType.Redirect}
         authenticationRequest={loginRequest}
       >
-        <ChatContainer />
+        <AuthenticatedChatContainer />
       </MsalAuthenticationTemplate>
     </MsalProvider>
   );

@@ -1,12 +1,17 @@
-import { DefaultAzureCredential, OnBehalfOfCredentialOptions, OnBehalfOfCredential } from '@azure/identity';
+import { DefaultAzureCredential, OnBehalfOfCredential } from '@azure/identity';
 
-const FOUNDRY_ENDPOINT = process.env.FOUNDRY_ENDPOINT || '';
-const FOUNDRY_PROJECT_ID = process.env.FOUNDRY_PROJECT_ID || '';
-const FOUNDRY_AGENT_ID = process.env.FOUNDRY_AGENT_ID || '';
-const USE_MANAGED_IDENTITY = process.env.USE_MANAGED_IDENTITY === 'true';
-const AZURE_TENANT_ID = process.env.AZURE_TENANT_ID || '';
-const AZURE_CLIENT_ID = process.env.AZURE_CLIENT_ID || '';
-const AZURE_CLIENT_SECRET = process.env.AZURE_CLIENT_SECRET || '';
+// Read env vars lazily via getters to ensure dotenv has loaded
+const getFoundryEndpoint = () => process.env.FOUNDRY_ENDPOINT || '';
+const getFoundryProjectId = () => process.env.FOUNDRY_PROJECT_ID || '';
+const getFoundryAgentId = () => process.env.FOUNDRY_AGENT_ID || '';
+const useManagedIdentity = () => process.env.USE_MANAGED_IDENTITY === 'true';
+const getAzureTenantId = () => process.env.AZURE_TENANT_ID || '';
+const getAzureClientId = () => process.env.AZURE_CLIENT_ID || '';
+const getAzureClientSecret = () => process.env.AZURE_CLIENT_SECRET || '';
+
+// Azure AI Foundry uses https://ai.azure.com as the token audience
+const FOUNDRY_TOKEN_AUDIENCE = 'https://ai.azure.com';
+const API_VERSION = '2025-05-01';
 
 interface FoundryThread {
   id: string;
@@ -15,7 +20,7 @@ interface FoundryThread {
 interface FoundryMessage {
   id: string;
   role: string;
-  content: Array<{ text?: { value: string } }>;
+  content: Array<{ text?: { value: string }; type?: string }>;
 }
 
 interface FoundryRun {
@@ -33,7 +38,8 @@ export class FoundryClient {
 
   constructor(userToken: string) {
     this.userToken = userToken;
-    this.baseUrl = `${FOUNDRY_ENDPOINT}/api/projects/${FOUNDRY_PROJECT_ID}`;
+    this.baseUrl = `${getFoundryEndpoint()}/api/projects/${getFoundryProjectId()}`;
+    console.log(`FoundryClient initialized with baseUrl: ${this.baseUrl}`);
   }
 
   /**
@@ -43,31 +49,39 @@ export class FoundryClient {
    */
   private async getFoundryToken(): Promise<string> {
     try {
-      if (USE_MANAGED_IDENTITY) {
+      if (useManagedIdentity()) {
         // Production: Use Managed Identity with OBO
         // The Managed Identity of the Container App will exchange the user token
         const credential = new DefaultAzureCredential();
         const tokenResponse = await credential.getToken([
-          'https://cognitiveservices.azure.com/.default'
+          `${FOUNDRY_TOKEN_AUDIENCE}/.default`
         ]);
         return tokenResponse.token;
       } else {
         // Development: Use client credentials for OBO
-        if (!AZURE_TENANT_ID || !AZURE_CLIENT_ID || !AZURE_CLIENT_SECRET) {
-          // Fallback: Use user token directly (for testing)
-          console.warn('OBO credentials not configured, using user token directly');
-          return this.userToken;
+        const tenantId = getAzureTenantId();
+        const clientId = getAzureClientId();
+        const clientSecret = getAzureClientSecret();
+        
+        if (!tenantId || !clientId || !clientSecret) {
+          // Fallback: Use DefaultAzureCredential (works with az login)
+          console.warn('OBO credentials not configured, using DefaultAzureCredential');
+          const credential = new DefaultAzureCredential();
+          const tokenResponse = await credential.getToken([
+            `${FOUNDRY_TOKEN_AUDIENCE}/.default`
+          ]);
+          return tokenResponse.token;
         }
 
         const oboCredential = new OnBehalfOfCredential({
-          tenantId: AZURE_TENANT_ID,
-          clientId: AZURE_CLIENT_ID,
-          clientSecret: AZURE_CLIENT_SECRET,
+          tenantId,
+          clientId,
+          clientSecret,
           userAssertionToken: this.userToken
-        } as OnBehalfOfCredentialOptions);
+        });
 
         const tokenResponse = await oboCredential.getToken([
-          'https://cognitiveservices.azure.com/.default'
+          `${FOUNDRY_TOKEN_AUDIENCE}/.default`
         ]);
         return tokenResponse.token;
       }
@@ -86,20 +100,24 @@ export class FoundryClient {
     body?: any
   ): Promise<any> {
     const token = await this.getFoundryToken();
-    const url = `${this.baseUrl}${endpoint}`;
+    // Add api-version as query parameter
+    const separator = endpoint.includes('?') ? '&' : '?';
+    const url = `${this.baseUrl}${endpoint}${separator}api-version=${API_VERSION}`;
+
+    console.log(`Making ${method} request to: ${url}`);
 
     const response = await fetch(url, {
       method,
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'api-version': '2025-11-15-preview'
+        'Content-Type': 'application/json'
       },
       body: body ? JSON.stringify(body) : undefined
     });
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error(`Foundry API error: ${response.status} - ${errorText}`);
       throw new Error(`Foundry API error: ${response.status} - ${errorText}`);
     }
 
@@ -131,7 +149,7 @@ export class FoundryClient {
     const response: FoundryRun = await this.makeRequest(
       `/threads/${threadId}/runs`,
       'POST',
-      { assistant_id: FOUNDRY_AGENT_ID }
+      { assistant_id: getFoundryAgentId() }
     );
     return response.id;
   }
@@ -142,7 +160,7 @@ export class FoundryClient {
   async waitForCompletion(
     threadId: string,
     runId: string,
-    maxAttempts: number = 30
+    maxAttempts: number = 180
   ): Promise<void> {
     for (let i = 0; i < maxAttempts; i++) {
       const run: FoundryRun = await this.makeRequest(
@@ -150,23 +168,26 @@ export class FoundryClient {
         'GET'
       );
 
+      console.log(`Run status (attempt ${i + 1}/${maxAttempts}): ${run.status}`);
+
       if (run.status === 'completed') {
         return;
       }
 
-      if (run.status === 'failed' || run.status === 'cancelled') {
+      if (run.status === 'failed' || run.status === 'cancelled' || run.status === 'expired') {
         throw new Error(`Run ${run.status}`);
       }
 
-      // Wait 2 seconds before polling again
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait 1 second before polling again (faster polling)
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    throw new Error('Run timed out');
+    throw new Error('Run timed out after 3 minutes');
   }
 
   /**
    * Get the latest message from a thread
+   * Handles both text responses and Code Interpreter outputs
    */
   async getLatestMessage(threadId: string): Promise<string> {
     const response = await this.makeRequest(`/threads/${threadId}/messages`, 'GET');
@@ -181,7 +202,18 @@ export class FoundryClient {
       throw new Error('No assistant response found');
     }
 
-    return assistantMessage.content[0]?.text?.value || 'No response';
+    // Handle different content types (text, code interpreter, etc.)
+    const contentParts: string[] = [];
+    for (const content of assistantMessage.content) {
+      if (content.type === 'text' && content.text?.value) {
+        contentParts.push(content.text.value);
+      } else if (content.text?.value) {
+        // Fallback for simple text content
+        contentParts.push(content.text.value);
+      }
+    }
+
+    return contentParts.join('\n') || 'No response';
   }
 }
 
@@ -189,9 +221,34 @@ export class FoundryClient {
  * Factory function to create Foundry client with user context
  */
 export async function createFoundryClient(userToken: string): Promise<FoundryClient> {
-  if (!FOUNDRY_ENDPOINT || !FOUNDRY_PROJECT_ID || !FOUNDRY_AGENT_ID) {
-    throw new Error('Azure AI Foundry configuration is incomplete');
+  const endpoint = getFoundryEndpoint();
+  const projectId = getFoundryProjectId();
+  const agentId = getFoundryAgentId();
+  
+  console.log(`Creating FoundryClient - endpoint: ${endpoint}, project: ${projectId}, agent: ${agentId}`);
+  
+  if (!endpoint || !projectId || !agentId) {
+    throw new Error(`Azure AI Foundry configuration is incomplete. endpoint=${endpoint}, project=${projectId}, agent=${agentId}`);
   }
 
   return new FoundryClient(userToken);
+}
+
+/**
+ * Factory function to create Foundry client using DefaultAzureCredential
+ * Useful for demo/testing without user authentication
+ */
+export async function createFoundryClientWithDefaultCredential(): Promise<FoundryClient> {
+  const endpoint = getFoundryEndpoint();
+  const projectId = getFoundryProjectId();
+  const agentId = getFoundryAgentId();
+  
+  console.log(`Creating FoundryClient (demo) - endpoint: ${endpoint}, project: ${projectId}, agent: ${agentId}`);
+  
+  if (!endpoint || !projectId || !agentId) {
+    throw new Error(`Azure AI Foundry configuration is incomplete. endpoint=${endpoint}, project=${projectId}, agent=${agentId}`);
+  }
+
+  // Pass empty token - the client will use DefaultAzureCredential
+  return new FoundryClient('');
 }

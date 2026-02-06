@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { ChatMessage as ChatMessageType } from '../types/chat';
 import { ChatMessage } from './ChatMessage';
 
@@ -6,8 +7,19 @@ interface ChatMessageListProps {
 }
 
 export function ChatMessageList({ messages }: ChatMessageListProps) {
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [messages]);
+
   return (
     <div
+      ref={containerRef}
       style={{
         flex: 1,
         overflowY: 'auto',
@@ -36,9 +48,21 @@ export function ChatMessageList({ messages }: ChatMessageListProps) {
           </div>
         </div>
       ) : (
-        messages.map((message, index) => (
-          <ChatMessage key={index} message={message} />
-        ))
+        <>
+          {messages.map((message, index) => {
+            // isLatest is true for the last assistant message
+            const isLastMessage = index === messages.length - 1;
+            const isLatestAssistant = isLastMessage && message.role === 'assistant';
+            return (
+              <ChatMessage 
+                key={index} 
+                message={message} 
+                isLatest={isLatestAssistant}
+              />
+            );
+          })}
+          <div ref={messagesEndRef} style={{ height: '1px' }} />
+        </>
       )}
     </div>
   );
